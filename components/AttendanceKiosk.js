@@ -8,15 +8,17 @@ export default function AttendanceKiosk() {
     const [analyzing, setAnalyzing] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [attendanceLog, setAttendanceLog] = useState([]);
-    const [autoCapture, setAutoCapture] = useState(false);
-    const [captureInterval, setCaptureInterval] = useState(5);
-    const [employeeName, setEmployeeName] = useState('');
+    const [autoCapture, setAutoCapture] = useState(true); // Auto-capture enabled by default
+    const [captureInterval, setCaptureInterval] = useState(3); // Auto-capture every 3 seconds
     const [capturedImage, setCapturedImage] = useState(null);
-    const [showNameInput, setShowNameInput] = useState(false);
+    const [showCapturedImage, setShowCapturedImage] = useState(false);
+    const [lastProcessedTime, setLastProcessedTime] = useState(0);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const intervalRef = useRef(null);
+    const autoCaptureRef = useRef(null);
 
     // Initialize dark mode
     useEffect(() => {
@@ -47,7 +49,7 @@ export default function AttendanceKiosk() {
                     });
                 }
                 setIsCapturing(true);
-                speak('Webcam started. Ready for attendance.');
+                speak('Webcam started. Automatic face recognition is active.');
             } catch (err) {
                 setStatusMessage('Error accessing webcam: ' + err.message);
                 speak('Error accessing webcam');
@@ -60,6 +62,9 @@ export default function AttendanceKiosk() {
         return () => {
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (autoCaptureRef.current) {
+                clearInterval(autoCaptureRef.current);
             }
         };
     }, []);
@@ -187,14 +192,14 @@ export default function AttendanceKiosk() {
                 throw new Error('Invalid blob created from canvas');
             }
 
-            // Store the captured image
+            // Store the captured image and automatically submit for face recognition
             setCapturedImage(blob);
-            setShowNameInput(true);
-            setEmployeeName(''); // Clear previous name
+            setShowCapturedImage(true);
             setAnalyzing(false);
-            setStatusMessage('✓ Image captured! Please enter your name.');
-            playSound('success');
-            speak('Image captured. Please enter your name.');
+            setLastProcessedTime(Date.now());
+            
+            // Automatically submit for face recognition (pass blob directly to avoid state timing issue)
+            submitAttendance(blob);
 
         } catch (err) {
             playSound('error');
@@ -203,21 +208,23 @@ export default function AttendanceKiosk() {
         }
     };
 
-    // Submit attendance with captured image and name
-    const submitAttendance = async () => {
-        if (!capturedImage || !employeeName.trim()) {
-            setStatusMessage('⚠ Please enter your name');
+    // Submit attendance with captured image (face recognition will identify employee)
+    const submitAttendance = async (imageBlob = null) => {
+        // Use provided blob or fall back to state
+        const imageToUse = imageBlob || capturedImage;
+        
+        if (!imageToUse) {
+            setStatusMessage('⚠ Please capture an image first');
             playSound('error');
             return;
         }
 
         setAnalyzing(true);
-        setStatusMessage('Analyzing and recording attendance...');
+        setStatusMessage('Recognizing face...');
         try {
-            // Create form data
+            // Create form data (no name needed - face recognition will identify employee)
             const formData = new FormData();
-            formData.append('image', capturedImage, 'capture.jpg');
-            formData.append('name', employeeName.trim());
+            formData.append('image', imageToUse, 'capture.jpg');
 
             // Send to attendance API
             const response = await fetch('/api/attendance', {
@@ -235,28 +242,61 @@ export default function AttendanceKiosk() {
                 };
                 
                 setAttendanceLog(prev => [record, ...prev.slice(0, 9)]);
-                setEmployeeName('');
                 setCapturedImage(null);
-                setShowNameInput(false);
+                setShowCapturedImage(false);
+                setLastProcessedTime(Date.now());
 
                 playSound('success');
+                
+                // Show face recognition info
+                let successMsg = `✓ Attendance marked for ${data.employee.name}!`;
+                if (data.face_match && data.face_match.recognized) {
+                    successMsg += ` (${data.face_match.similarity}% match)`;
+                }
+                
                 speak(`Attendance marked for ${data.employee.name}. Have a great day!`);
-                setStatusMessage(`✓ Attendance marked successfully for ${data.employee.name}!`);
+                setStatusMessage(successMsg);
+                
+                // Clear message after 5 seconds
+                setTimeout(() => {
+                    setStatusMessage('');
+                }, 5000);
             } else {
                 playSound('error');
                 const errorMsg = data.error || 'Failed to record attendance';
-                const displayMsg = data.message || errorMsg;
+                let displayMsg = data.message || errorMsg;
+                
+                // Enhance face recognition error messages
+                if (data.error === 'Employee not recognized') {
+                    if (data.similarity && data.similarity > 0) {
+                        displayMsg = `Face not recognized (${data.similarity}% similarity). ${data.message || 'Please ensure your face is clearly visible and try again with better lighting.'}`;
+                    } else {
+                        displayMsg = data.message || 'Face not recognized. Please ensure your face is clearly visible, or contact HR if your photo needs to be updated.';
+                    }
+                } else if (data.error === 'No employees found') {
+                    displayMsg = data.message || 'No employees with registered photos found. Please contact HR to register your photo.';
+                }
+                
                 speak(displayMsg);
                 setStatusMessage(`⚠ ${displayMsg}`);
                 
-                // If duplicate entry, clear the form so they can try again
+                // For duplicate entry, show a shorter message
                 if (data.error === 'Attendance already recorded') {
+                    setStatusMessage(`✓ ${data.employee?.name || 'You'} already checked in today`);
                     setTimeout(() => {
-                        setShowNameInput(false);
-                        setCapturedImage(null);
-                        setEmployeeName('');
+                        setStatusMessage('');
                     }, 3000);
+                } else {
+                    // For other errors, show message briefly then clear
+                    setTimeout(() => {
+                        setStatusMessage('');
+                    }, 4000);
                 }
+                
+                // Always clear captured image after processing
+                setShowCapturedImage(false);
+                setCapturedImage(null);
+                setLastProcessedTime(Date.now());
             }
         } catch (err) {
             playSound('error');
@@ -264,48 +304,158 @@ export default function AttendanceKiosk() {
             setStatusMessage('Error: ' + err.message);
         } finally {
             setAnalyzing(false);
-            setTimeout(() => {
-                setStatusMessage('');
-                if (showNameInput) {
-                    setShowNameInput(false);
-                    setCapturedImage(null);
-                }
-            }, 5000);
         }
     };
 
-    // Auto-capture effect
-    useEffect(() => {
-        if (autoCapture && isCapturing) {
-            intervalRef.current = setInterval(() => {
-                captureAndAnalyze();
-            }, captureInterval * 1000);
-        } else {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+    // Start automatic capture
+    const startAutoCapture = () => {
+        if (autoCaptureRef.current) {
+            clearInterval(autoCaptureRef.current);
         }
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, [autoCapture, isCapturing, captureInterval]);
+        
+        if (isCapturing && !isProcessing) {
+            autoCaptureRef.current = setInterval(() => {
+                // Only capture if not currently processing and enough time has passed
+                const now = Date.now();
+                if (!isProcessing && (now - lastProcessedTime) >= (captureInterval * 1000)) {
+                    autoCaptureAndProcess();
+                }
+            }, captureInterval * 1000);
+        }
+    };
 
-    const themeClasses = 'min-h-screen bg-[#0f0f23] text-white';
+    // Stop automatic capture
+    const stopAutoCapture = () => {
+        if (autoCaptureRef.current) {
+            clearInterval(autoCaptureRef.current);
+            autoCaptureRef.current = null;
+        }
+    };
+
+    // Automatic capture and process
+    const autoCaptureAndProcess = async () => {
+        if (!videoRef.current || isProcessing || !isCapturing) return;
+
+        const video = videoRef.current;
+        
+        // Check if video is ready
+        if (!video || !video.videoWidth || !video.videoHeight) return;
+        
+        if (video.readyState < video.HAVE_CURRENT_DATA) return;
+
+        setIsProcessing(true);
+        
+        try {
+            // Capture frame from video
+            const canvas = canvasRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            // Convert to blob
+            const blob = await new Promise((resolve, reject) => {
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create image blob'));
+                        }
+                    },
+                    'image/jpeg',
+                    0.95
+                );
+            });
+
+            if (!blob || !(blob instanceof Blob)) {
+                throw new Error('Invalid blob created from canvas');
+            }
+
+            // Update state
+            setCapturedImage(blob);
+            setLastProcessedTime(Date.now());
+            
+            // Automatically process the image
+            await submitAttendance(blob);
+            
+        } catch (err) {
+            console.error('Auto-capture error:', err);
+            // Don't show error message for every failed auto-capture, just log it
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Effect to manage auto-capture
+    useEffect(() => {
+        if (autoCapture && isCapturing && !isProcessing) {
+            startAutoCapture();
+        } else {
+            stopAutoCapture();
+        }
+        
+        return () => {
+            stopAutoCapture();
+        };
+    }, [autoCapture, isCapturing, captureInterval, isProcessing]);
+
+    const themeClasses = 'min-h-screen bg-[#0f0f23] text-white relative overflow-hidden';
 
     return (
         <div className={themeClasses}>
+            {/* Animated Background Elements */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+                {/* Animated gradient orbs - Professional blue/slate tones */}
+                <div className="absolute top-20 left-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute top-40 right-20 w-80 h-80 bg-slate-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+                <div className="absolute bottom-20 left-1/3 w-72 h-72 bg-slate-700/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+                <div className="absolute bottom-40 right-1/4 w-96 h-96 bg-blue-700/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+                
+                {/* Floating particles - Subtle gray/blue tones */}
+                <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-slate-400/20 rounded-full animate-bounce" style={{ animationDuration: '3s', animationDelay: '0s' }}></div>
+                <div className="absolute top-1/3 left-1/3 w-1.5 h-1.5 bg-blue-400/20 rounded-full animate-bounce" style={{ animationDuration: '4s', animationDelay: '1s' }}></div>
+                <div className="absolute top-1/2 left-1/5 w-2 h-2 bg-slate-500/20 rounded-full animate-bounce" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }}></div>
+                <div className="absolute top-2/3 left-1/4 w-1.5 h-1.5 bg-blue-500/20 rounded-full animate-bounce" style={{ animationDuration: '4.5s', animationDelay: '1.5s' }}></div>
+                <div className="absolute top-1/5 right-1/4 w-2 h-2 bg-slate-400/20 rounded-full animate-bounce" style={{ animationDuration: '3.2s', animationDelay: '0.8s' }}></div>
+                <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-blue-400/20 rounded-full animate-bounce" style={{ animationDuration: '4.2s', animationDelay: '1.2s' }}></div>
+                <div className="absolute top-1/2 right-1/5 w-2 h-2 bg-slate-500/20 rounded-full animate-bounce" style={{ animationDuration: '3.8s', animationDelay: '0.3s' }}></div>
+                <div className="absolute top-2/3 right-1/4 w-1.5 h-1.5 bg-blue-500/20 rounded-full animate-bounce" style={{ animationDuration: '4.8s', animationDelay: '1.8s' }}></div>
+                
+                {/* Grid pattern overlay - Professional gray grid */}
+                <div className="absolute inset-0" style={{
+                    backgroundImage: `
+                        linear-gradient(rgba(100,116,139,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(100,116,139,0.05) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '50px 50px'
+                }}></div>
+                
+                {/* Radial gradient overlay - Subtle blue */}
+                <div className="absolute inset-0" style={{
+                    background: 'radial-gradient(circle at center, rgba(37,99,235,0.08) 0%, transparent 70%)'
+                }}></div>
+                
+                {/* Animated lines - Professional blue/gray */}
+                <div className="absolute top-0 left-0 w-full h-full">
+                    <div className="absolute top-1/4 left-0 w-px h-64 bg-gradient-to-b from-transparent via-blue-600/15 to-transparent animate-pulse"></div>
+                    <div className="absolute top-1/2 right-0 w-px h-64 bg-gradient-to-b from-transparent via-slate-600/15 to-transparent animate-pulse" style={{ animationDelay: '1s' }}></div>
+                    <div className="absolute bottom-1/4 left-1/4 w-64 h-px bg-gradient-to-r from-transparent via-blue-500/15 to-transparent animate-pulse" style={{ animationDelay: '2s' }}></div>
+                </div>
+            </div>
+            
+            {/* Content with relative positioning */}
+            <div className="relative z-10">
             {/* Header */}
             <div className="bg-[#1a1a2e]/80 backdrop-blur-sm border-b border-[#1e293b]">
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#9333ea] to-[#ec4899] shadow-lg shadow-purple-500/20">
+                            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#2563eb] to-[#1e40af] shadow-lg shadow-blue-500/20">
                                 <span className="text-2xl">👤</span>
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold">Smart Attendance Kiosk</h1>
+                                <h1 className="text-2xl font-bold">MoodLens Attendance Kiosk</h1>
                                 <p className="text-sm text-slate-400">
                                     AI-Powered Check-In System
                                 </p>
@@ -354,7 +504,7 @@ export default function AttendanceKiosk() {
                                         {statusMessage.includes('Error') && (
                                             <button
                                                 onClick={startWebcam}
-                                                className="px-6 py-3 bg-gradient-to-r from-[#9333ea] to-[#ec4899] hover:from-[#7e22ce] hover:to-[#db2777] text-white rounded-lg font-semibold transition-all shadow-lg shadow-purple-500/20"
+                                                className="px-6 py-3 bg-gradient-to-r from-[#2563eb] to-[#1e40af] hover:from-[#1d4ed8] hover:to-[#1e3a8a] text-white rounded-lg font-semibold transition-all shadow-lg shadow-blue-500/20"
                                             >
                                                 Retry Start Webcam
                                             </button>
@@ -368,12 +518,12 @@ export default function AttendanceKiosk() {
                                             playsInline
                                             className="w-full h-full object-cover"
                                         />
-                                        {analyzing && (
+                                        {isProcessing && (
                                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                                 <div className="text-center">
-                                                    <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                                                     <p className="text-white font-semibold">
-                                                        {showNameInput ? 'Processing...' : 'Capturing...'}
+                                                        {analyzing ? 'Recognizing face...' : 'Processing...'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -384,59 +534,6 @@ export default function AttendanceKiosk() {
 
                             <canvas ref={canvasRef} className="hidden" />
 
-                            {/* Captured Image Preview & Name Input */}
-                            {showNameInput && capturedImage && (
-                                <div className="mb-4 p-4 rounded-lg bg-[#1e293b] border border-[#334155]">
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-semibold mb-2 text-white">
-                                            Captured Image
-                                        </label>
-                                        <img 
-                                            src={URL.createObjectURL(capturedImage)} 
-                                            alt="Captured" 
-                                            className="w-full max-h-48 object-contain rounded-lg border border-slate-300"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2 text-white">
-                                            Enter Your Name
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={employeeName}
-                                            onChange={(e) => setEmployeeName(e.target.value)}
-                                            placeholder="Type your full name"
-                                            className="w-full px-4 py-2 rounded-lg border bg-[#0f0f23] border-[#1e293b] text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                            disabled={analyzing}
-                                            autoFocus
-                                        />
-                                        <p className="text-xs mt-2 text-slate-400">
-                                            Enter your name exactly as it appears in the employee records
-                                        </p>
-                                        <div className="flex gap-2 mt-3">
-                                            <button
-                                                onClick={submitAttendance}
-                                                disabled={analyzing || !employeeName.trim()}
-                                                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg font-semibold transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                ✓ Submit Attendance
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setShowNameInput(false);
-                                                    setCapturedImage(null);
-                                                    setEmployeeName('');
-                                                    setStatusMessage('');
-                                                }}
-                                                disabled={analyzing}
-                                                className="px-4 py-2 bg-[#1e293b] hover:bg-[#334155] border border-[#334155] text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Status Message */}
                             {statusMessage && (
@@ -451,16 +548,9 @@ export default function AttendanceKiosk() {
 
                             {/* Controls */}
                             <div className="space-y-4">
-                                {isCapturing && !showNameInput && (
+                                {isCapturing && (
                                     <>
                                         <div className="flex flex-wrap gap-3">
-                                            <button
-                                                onClick={captureImage}
-                                                disabled={analyzing}
-                                                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#9333ea] to-[#ec4899] hover:from-[#7e22ce] hover:to-[#db2777] text-white rounded-lg font-semibold transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                📸 Capture & Mark Attendance
-                                            </button>
                                             <button
                                                 onClick={stopWebcam}
                                                 className="px-6 py-3 rounded-lg font-semibold transition-all bg-[#16213e] hover:bg-[#1e293b] border border-[#1e293b] text-white"
@@ -469,30 +559,29 @@ export default function AttendanceKiosk() {
                                             </button>
                                         </div>
 
-                                        {/* Auto-capture Settings */}
+                                        {/* Auto-capture Status */}
                                         <div className="p-4 rounded-lg bg-[#1e293b]">
                                             <div className="flex items-center justify-between mb-3">
-                                                <label className="font-semibold">Auto-Capture Mode</label>
-                                                <button
-                                                    onClick={() => setAutoCapture(!autoCapture)}
-                                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoCapture ? 'bg-green-500' : 'bg-[#1e293b]'}`}
-                                                >
-                                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoCapture ? 'translate-x-6' : 'translate-x-1'}`} />
-                                                </button>
-                                            </div>
-                                            {autoCapture && (
                                                 <div>
-                                                    <label className="text-sm mb-2 block">Interval: {captureInterval}s</label>
-                                                    <input
-                                                        type="range"
-                                                        min="3"
-                                                        max="30"
-                                                        value={captureInterval}
-                                                        onChange={(e) => setCaptureInterval(Number(e.target.value))}
-                                                        className="w-full"
-                                                    />
+                                                    <label className="font-semibold block">Automatic Recognition</label>
+                                                    <p className="text-xs text-slate-400 mt-1">Capturing and processing every {captureInterval} seconds</p>
                                                 </div>
-                                            )}
+                                                <div className="flex items-center">
+                                                    <span className={`w-3 h-3 rounded-full mr-2 ${isProcessing ? 'bg-blue-600 animate-pulse' : 'bg-green-500'}`}></span>
+                                                    <span className="text-sm">{isProcessing ? 'Processing...' : 'Active'}</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm mb-2 block">Capture Interval: {captureInterval}s</label>
+                                                <input
+                                                    type="range"
+                                                    min="2"
+                                                    max="10"
+                                                    value={captureInterval}
+                                                    onChange={(e) => setCaptureInterval(Number(e.target.value))}
+                                                    className="w-full"
+                                                />
+                                            </div>
                                         </div>
                                     </>
                                 )}
@@ -508,19 +597,23 @@ export default function AttendanceKiosk() {
                             <ul className="space-y-2 text-sm text-slate-300">
                                 <li className="flex items-start">
                                     <span className="mr-2">1.</span>
-                                    <span>Position your face clearly in the frame (camera starts automatically)</span>
+                                    <span>Position your face clearly in the frame</span>
                                 </li>
                                 <li className="flex items-start">
                                     <span className="mr-2">2.</span>
-                                    <span>Click "Capture & Mark Attendance"</span>
+                                    <span>The system automatically captures and recognizes your face every {captureInterval} seconds</span>
                                 </li>
                                 <li className="flex items-start">
                                     <span className="mr-2">3.</span>
-                                    <span>Enter your name exactly as it appears in employee records</span>
+                                    <span>No button clicks needed - just stand in front of the camera!</span>
                                 </li>
                                 <li className="flex items-start">
                                     <span className="mr-2">4.</span>
-                                    <span>Click "Submit Attendance" and wait for confirmation</span>
+                                    <span>Attendance is automatically recorded when your face is recognized</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">5.</span>
+                                    <span>Look for the green status message when attendance is marked</span>
                                 </li>
                             </ul>
                         </div>
@@ -559,6 +652,7 @@ export default function AttendanceKiosk() {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     );

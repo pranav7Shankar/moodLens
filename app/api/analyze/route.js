@@ -1,39 +1,28 @@
+import { NextResponse } from 'next/server';
 import AWS from 'aws-sdk';
-import formidable from 'formidable';
-import fs from 'fs';
 
-// Configure AWS
-const rekognition = new AWS.Rekognition({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION || 'us-east-1'
-});
+// Configure AWS - lazy initialization
+function getRekognition() {
+    return new AWS.Rekognition({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'us-east-1'
+    });
+}
 
-export const config = {
-    api: {
-        bodyParser: false,
-    },
-};
-
-export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-
+export async function POST(request) {
     try {
-        // Parse the uploaded file
-        const form = formidable({});
-        const [fields, files] = await form.parse(req);
-
-        const uploadedFile = files.image;
-        if (!uploadedFile || uploadedFile.length === 0) {
-            return res.status(400).json({ error: 'No image file provided' });
+        // Get form data
+        const formData = await request.formData();
+        const imageFile = formData.get('image');
+        
+        if (!imageFile || !(imageFile instanceof File)) {
+            return NextResponse.json({ error: 'No image file provided' }, { status: 400 });
         }
 
-        const file = uploadedFile[0];
-
-        // Read the image file
-        const imageBuffer = fs.readFileSync(file.filepath);
+        // Convert File to Buffer
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const imageBuffer = Buffer.from(arrayBuffer);
 
         // Analyze the face using AWS Rekognition
         const params = {
@@ -45,10 +34,8 @@ export default async function handler(req, res) {
             ]
         };
 
+        const rekognition = getRekognition();
         const result = await rekognition.detectFaces(params).promise();
-
-        // Clean up the temporary file
-        fs.unlinkSync(file.filepath);
 
         if (result.FaceDetails && result.FaceDetails.length > 0) {
             // Process the results to make them more readable
@@ -101,15 +88,13 @@ export default async function handler(req, res) {
                 boundingBox: face.BoundingBox
             }));
 
-            // No push side-effects; return JSON only
-
-            res.status(200).json({
+            return NextResponse.json({
                 success: true,
                 facesDetected: result.FaceDetails.length,
                 results: processedResults
             });
         } else {
-            res.status(200).json({
+            return NextResponse.json({
                 success: true,
                 facesDetected: 0,
                 message: 'No faces detected in the image'
@@ -118,9 +103,10 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Error analyzing image:', error);
-        res.status(500).json({
+        return NextResponse.json({
             error: 'Failed to analyze image',
             details: error.message
-        });
+        }, { status: 500 });
     }
 }
+

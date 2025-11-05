@@ -1,12 +1,14 @@
+import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-export default async function handler(req, res) {
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-
+export async function GET(request) {
     try {
-        const { start_date, end_date, date, gender, department } = req.query;
+        const { searchParams } = new URL(request.url);
+        const start_date = searchParams.get('start_date');
+        const end_date = searchParams.get('end_date');
+        const date = searchParams.get('date');
+        const gender = searchParams.get('gender');
+        const department = searchParams.get('department');
 
         let query = supabaseAdmin
             .from('anonymous_emotions')
@@ -34,14 +36,14 @@ export default async function handler(req, res) {
 
         if (error) throw error;
 
-        return res.status(200).json({ anonymous_emotions: data || [] });
+        return NextResponse.json({ anonymous_emotions: data || [] });
 
     } catch (error) {
         console.error('Error fetching anonymous emotions:', error);
-        return res.status(500).json({
+        return NextResponse.json({
             error: 'Failed to fetch anonymous emotions',
             details: error.message
-        });
+        }, { status: 500 });
     }
 }
 

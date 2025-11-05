@@ -1,7 +1,8 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, ResponsiveContainer, PieChart, Pie, Cell, RadialBarChart, RadialBar } from 'recharts';
-import Head from 'next/head'
-import Link from 'next/link'
+import Link from 'next/link';
 
 export default function Home() {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -106,11 +107,6 @@ export default function Home() {
     
 
     return (
-        <>
-        <Head>
-            <title>Mood Lens</title>
-            <link rel="icon" href="/network-detection.svg" />
-        </Head>
         <div className={themeClasses}>
             {/* Banner Header */}
             <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#1a1a2e] border-b border-[#1e293b]">
@@ -704,7 +700,6 @@ export default function Home() {
                 </footer>
             </div>
         </div>
-        </>
     );
-
 }
+
