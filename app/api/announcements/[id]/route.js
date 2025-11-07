@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 // DELETE - Delete/deactivate an announcement
 export async function DELETE(request, { params }) {
     try {
-        const { id } = params;
+        const { id } = await params;
 
         // Deactivate announcement instead of deleting
         const { error } = await supabaseAdmin

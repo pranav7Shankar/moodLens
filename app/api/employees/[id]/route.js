@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function GET(request, { params }) {
     try {
-        const { id } = params;
+        const { id } = await params;
         const { data, error } = await supabaseAdmin
             .from('employees')
             .select('*')
@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
 
 export async function PUT(request, { params }) {
     try {
-        const { id } = params;
+        const { id } = await params;
         const formData = await request.formData();
         
         const updates = {};
@@ -59,7 +59,7 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
     try {
-        const { id } = params;
+        const { id } = await params;
         const { error } = await supabaseAdmin
             .from('employees')
             .delete()
