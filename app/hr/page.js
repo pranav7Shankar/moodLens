@@ -578,13 +578,13 @@ export default function HRDashboard() {
             <div className="h-screen bg-[#0f0f23] text-white flex flex-col overflow-hidden">
             {/* Header */}
             <div className="bg-[#1a1a2e] border-b border-[#1e293b] flex-shrink-0">
-                <div className="max-w-full mx-auto px-4 py-4">
+                <div className="max-w-full mx-auto px-2 py-2">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-2">
                             {/* Hamburger Menu Button for Mobile */}
                             <button
                                 onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                                className="lg:hidden p-2 rounded hover:bg-[#16213e] transition-colors text-white mr-3"
+                                className="lg:hidden p-2 rounded hover:bg-[#16213e] transition-colors text-white"
                                 aria-label="Toggle sidebar"
                             >
                                 <svg
@@ -602,9 +602,7 @@ export default function HRDashboard() {
                                     )}
                                 </svg>
                             </button>
-                            <div className="flex items-center justify-center">
-                                <img src="/logo.png" alt="MoodLens Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain" />
-                            </div>
+                            <img src="/logo.png" alt="MoodLens Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain" />
                             <div className="hidden md:block">
                                 <h1 className="text-3xl md:text-4xl text-white">MoodLens</h1>
                             </div>
@@ -737,7 +735,7 @@ export default function HRDashboard() {
                                 setActiveTab('employees');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
                                 activeTab === 'employees'
                                     ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
@@ -750,7 +748,7 @@ export default function HRDashboard() {
                                 setActiveTab('management');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
                                 activeTab === 'management'
                                     ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
@@ -763,7 +761,7 @@ export default function HRDashboard() {
                                 setActiveTab('attendance');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
                                 activeTab === 'attendance'
                                     ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
@@ -776,7 +774,7 @@ export default function HRDashboard() {
                                 setActiveTab('emotions');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
                                 activeTab === 'emotions'
                                     ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
@@ -790,7 +788,7 @@ export default function HRDashboard() {
                                 setMobileSidebarOpen(false);
                                 fetchAnnouncements();
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors text-sm md:text-base orbitron ${
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors text-xs md:text-sm orbitron ${
                                 activeTab === 'dashboard'
                                     ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'

@@ -23,25 +23,14 @@ export async function GET(request) {
     }
 }
 
-// POST - Create a new announcement (HR only)
+// POST - Create a new announcement
 export async function POST(request) {
     try {
-        // Check authentication
-        const employeeId = request.cookies.get('hr_auth')?.value;
+        // Get current logged-in user ID from cookie
+        const userId = request.cookies.get('hr_auth')?.value;
         
-        if (!employeeId) {
+        if (!userId) {
             return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-        }
-
-        // Verify user is HR
-        const { data: employee, error: empError } = await supabaseAdmin
-            .from('employees')
-            .select('id, department')
-            .eq('id', employeeId)
-            .single();
-
-        if (empError || !employee || employee.department !== 'HR') {
-            return NextResponse.json({ error: 'Unauthorized. HR access required.' }, { status: 403 });
         }
 
         const body = await request.json();
@@ -57,7 +46,7 @@ export async function POST(request) {
                 title: title.trim(),
                 message: message.trim(),
                 priority: priority || 'normal', // 'low', 'normal', 'high', 'urgent'
-                created_by: employeeId,
+                created_by: userId,
                 is_active: true,
                 created_at: new Date().toISOString()
             }])
