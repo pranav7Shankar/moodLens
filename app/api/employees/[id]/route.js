@@ -26,6 +26,7 @@ export async function PUT(request, { params }) {
         if (formData.get('gender')) updates.gender = formData.get('gender');
         if (formData.get('age')) updates.age = Number(formData.get('age'));
         if (formData.get('department')) updates.department = formData.get('department');
+        if (formData.get('email')) updates.email = formData.get('email');
         
         const imageFile = formData.get('image');
         if (imageFile && imageFile instanceof File) {

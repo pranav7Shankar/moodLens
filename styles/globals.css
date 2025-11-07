@@ -1,4 +1,34 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Momo+Trust+Display&display=swap');
+
+/* Gasoek One Font */
+@font-face {
+  font-family: 'Gasoek One';
+  src: url('/Gasoek_One/GasoekOne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Orbitron Font */
+@font-face {
+  font-family: 'Orbitron';
+  src: url('/Orbitron/static/Orbitron-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Set Orbitron as default font for entire project */
+html,
+body {
+  font-family: 'Orbitron', sans-serif;
+}
+
+/* Apply to all elements by default */
+* {
+  font-family: inherit;
+}
 
 /* Modern Dark Theme Color Palette - Ghost-inspired */
 :root {
@@ -333,6 +363,62 @@ input[type="file"]::file-selector-button {
   animation: progress-fill 1s ease-out;
 }
 
+/* Fade in scale animation for email chips */
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Slide in from left */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Slide in from up */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Bounce animation for icons */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 /* Dashboard specific styles */
 .dashboard-bg-light {
   background: var(--bg-primary);
@@ -410,4 +496,24 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent-purple);
   box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+}
+/* Anton font class */
+.anton-regular {
+  font-family: "Anton", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Gasoek One font class */
+.gasoek-one {
+  font-family: 'Gasoek One', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Orbitron font class - kept for explicit use if needed */
+.orbitron {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }

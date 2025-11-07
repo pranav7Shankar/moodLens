@@ -9,13 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.925.0",
     "@splinetool/react-spline": "^4.1.0",
     "@supabase/supabase-js": "^2.78.0",
     "@tailwindcss/postcss": "^4.1.13",
-    "aws-sdk": "^2.1500.0",
     "bcryptjs": "^2.4.3",
     "formidable": "^3.5.1",
     "next": "^14.2.32",
+    "nodemailer": "^7.0.10",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^3.2.0"

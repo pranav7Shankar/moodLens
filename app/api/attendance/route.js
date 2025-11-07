@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import AWS from 'aws-sdk';
+import { RekognitionClient, DetectFacesCommand, CompareFacesCommand } from '@aws-sdk/client-rekognition';
 import https from 'https';
 import http from 'http';
 
-function getRekognition() {
-    return new AWS.Rekognition({
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        region: process.env.AWS_REGION || 'us-east-1'
+function getRekognitionClient() {
+    return new RekognitionClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+        credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        }
     });
 }
 
@@ -34,8 +36,9 @@ export async function POST(request) {
             Attributes: ['ALL']
         };
 
-        const rekognition = getRekognition();
-        const rekognitionResult = await rekognition.detectFaces(detectParams).promise();
+        const rekognitionClient = getRekognitionClient();
+        const detectCommand = new DetectFacesCommand(detectParams);
+        const rekognitionResult = await rekognitionClient.send(detectCommand);
 
         if (!rekognitionResult.FaceDetails || rekognitionResult.FaceDetails.length === 0) {
             return NextResponse.json({ error: 'No face detected in the image' }, { status: 400 });
@@ -60,59 +63,88 @@ export async function POST(request) {
 
         // Face recognition: Compare captured face against all employee images
         const SIMILARITY_THRESHOLD = 70; // Minimum similarity percentage required
+        const HIGH_CONFIDENCE_THRESHOLD = 95; // Early exit if we find a match this high
         let bestMatch = null;
         let matchedEmployee = null;
         let bestSimilarity = 0;
 
-        console.log(`Comparing face against ${allEmployees.length} employees...`);
+        // Comparing face against employees for recognition
 
-        // Compare against all employees
-        for (const employee of allEmployees) {
-            if (!employee.employee_image) continue;
+        // Filter employees with images
+        const employeesWithImages = allEmployees.filter(emp => emp.employee_image);
+        
+        // Process employees in parallel batches (10 at a time to avoid overwhelming AWS)
+        const BATCH_SIZE = 10;
+        let foundHighConfidenceMatch = false;
 
-            try {
-                // Download the employee's stored image from Supabase storage
-                const employeeImageBuffer = await downloadImage(employee.employee_image);
-                
-                if (employeeImageBuffer) {
-                    // Compare faces using AWS Rekognition
-                    const compareParams = {
-                        SourceImage: {
-                            Bytes: capturedImageBuffer
-                        },
-                        TargetImage: {
-                            Bytes: employeeImageBuffer
-                        },
-                        SimilarityThreshold: SIMILARITY_THRESHOLD
-                    };
-
-                        try {
-                            const rekognition = getRekognition();
-                            const faceMatchResult = await rekognition.compareFaces(compareParams).promise();
+        for (let i = 0; i < employeesWithImages.length && !foundHighConfidenceMatch; i += BATCH_SIZE) {
+            const batch = employeesWithImages.slice(i, i + BATCH_SIZE);
+            
+            // Process batch in parallel
+            const batchResults = await Promise.allSettled(
+                batch.map(async (employee) => {
+                    try {
+                        // Download the employee's stored image from Supabase storage
+                        const employeeImageBuffer = await downloadImage(employee.employee_image);
                         
+                        if (!employeeImageBuffer) {
+                            return null;
+                        }
+
+                        // Compare faces using AWS Rekognition
+                        const compareParams = {
+                            SourceImage: {
+                                Bytes: capturedImageBuffer
+                            },
+                            TargetImage: {
+                                Bytes: employeeImageBuffer
+                            },
+                            SimilarityThreshold: SIMILARITY_THRESHOLD
+                        };
+
+                        const rekognitionClient = getRekognitionClient();
+                        const compareCommand = new CompareFacesCommand(compareParams);
+                        const faceMatchResult = await rekognitionClient.send(compareCommand);
+                    
                         if (faceMatchResult.FaceMatches && faceMatchResult.FaceMatches.length > 0) {
                             // Get the highest similarity match for this employee
                             const match = faceMatchResult.FaceMatches.reduce((best, current) => 
                                 current.Similarity > best.Similarity ? current : best
                             );
 
-                            // Track the best match across all employees
-                            if (match.Similarity > bestSimilarity) {
-                                bestSimilarity = match.Similarity;
-                                bestMatch = match;
-                                matchedEmployee = employee;
-                            }
+                            return {
+                                employee,
+                                match,
+                                similarity: match.Similarity
+                            };
                         }
-                    } catch (compareError) {
-                        console.error(`Error comparing faces for ${employee.name}:`, compareError);
-                        // Continue with next employee
-                        continue;
+                        return null;
+                    } catch (error) {
+                        console.error(`Error processing ${employee.name}:`, error.message);
+                        return null;
+                    }
+                })
+            );
+
+            // Process batch results
+            for (const result of batchResults) {
+                if (result.status === 'fulfilled' && result.value) {
+                    const { employee, match, similarity } = result.value;
+                    
+                    // Track the best match across all employees
+                    if (similarity > bestSimilarity) {
+                        bestSimilarity = similarity;
+                        bestMatch = match;
+                        matchedEmployee = employee;
+                        
+                        // Early exit if we found a very high confidence match
+                        if (similarity >= HIGH_CONFIDENCE_THRESHOLD) {
+                            // High confidence match found - stopping search
+                            foundHighConfidenceMatch = true;
+                            break;
+                        }
                     }
                 }
-            } catch (downloadError) {
-                console.error(`Error downloading image for ${employee.name}:`, downloadError);
-                // Continue with next employee
-                continue;
             }
         }
 
@@ -127,7 +159,7 @@ export async function POST(request) {
 
         // Found a match! Use the matched employee
         const employee = matchedEmployee;
-        console.log(`Face recognition successful: ${Math.round(bestSimilarity)}% similarity for ${employee.name}`);
+        // Face recognition successful
 
         // Use the face detection result from earlier
         const face = rekognitionResult.FaceDetails[0];
@@ -185,109 +217,122 @@ export async function POST(request) {
             throw attendanceError;
         }
 
-        // Store/update emotion record (upsert - update if exists, insert if not)
-        // Check if emotion record exists for this employee today
-        const { data: existingEmotion, error: checkEmotionError } = await supabaseAdmin
-            .from('emotion_records')
-            .select('id')
-            .eq('employee_id', employee.id)
-            .eq('date', today)
-            .single();
-
+        // Store/update emotion records in parallel (they don't depend on each other)
+        const emotionConfidence = Math.round(primaryEmotion.Confidence * 100) / 100;
         const emotionRecord = {
             employee_id: employee.id,
             employee_name: employee.name,
             date: today,
             emotion: primaryEmotion.Type,
-            emotion_confidence: Math.round(primaryEmotion.Confidence * 100) / 100,
+            emotion_confidence: emotionConfidence,
             timestamp: new Date().toISOString()
         };
 
+        // Run emotion record checks in parallel
+        const [emotionCheckResult, anonymousCheckResult] = await Promise.allSettled([
+            supabaseAdmin
+                .from('emotion_records')
+                .select('id')
+                .eq('employee_id', employee.id)
+                .eq('date', today)
+                .single(),
+            supabaseAdmin
+                .from('anonymous_emotions')
+                .select('id, count, confidence')
+                .eq('date', today)
+                .eq('emotion', primaryEmotion.Type)
+                .eq('gender', employee.gender || null)
+                .eq('department', employee.department || null)
+                .single()
+        ]);
+
+        // Process emotion record
         let emotionData = null;
         let emotionError = null;
 
-        if (checkEmotionError && checkEmotionError.code === 'PGRST116') {
-            // No existing record - insert new
-            const { data: newEmotion, error: insertError } = await supabaseAdmin
-                .from('emotion_records')
-                .insert([emotionRecord])
-                .select()
-                .single();
-            emotionData = newEmotion;
-            emotionError = insertError;
-        } else if (!checkEmotionError && existingEmotion) {
-            // Existing record - update it
-            const { data: updatedEmotion, error: updateError } = await supabaseAdmin
-                .from('emotion_records')
-                .update({
-                    emotion: primaryEmotion.Type,
-                    emotion_confidence: Math.round(primaryEmotion.Confidence * 100) / 100,
-                    timestamp: new Date().toISOString()
-                })
-                .eq('id', existingEmotion.id)
-                .select()
-                .single();
-            emotionData = updatedEmotion;
-            emotionError = updateError;
+        if (emotionCheckResult.status === 'fulfilled') {
+            const { data: existingEmotion, error: checkEmotionError } = emotionCheckResult.value;
+            
+            if (checkEmotionError && checkEmotionError.code === 'PGRST116') {
+                // No existing record - insert new
+                const { data: newEmotion, error: insertError } = await supabaseAdmin
+                    .from('emotion_records')
+                    .insert([emotionRecord])
+                    .select()
+                    .single();
+                emotionData = newEmotion;
+                emotionError = insertError;
+            } else if (!checkEmotionError && existingEmotion) {
+                // Existing record - update it
+                const { data: updatedEmotion, error: updateError } = await supabaseAdmin
+                    .from('emotion_records')
+                    .update({
+                        emotion: primaryEmotion.Type,
+                        emotion_confidence: emotionConfidence,
+                        timestamp: new Date().toISOString()
+                    })
+                    .eq('id', existingEmotion.id)
+                    .select()
+                    .single();
+                emotionData = updatedEmotion;
+                emotionError = updateError;
+            } else {
+                emotionError = checkEmotionError;
+            }
         } else {
-            emotionError = checkEmotionError;
+            emotionError = emotionCheckResult.reason;
         }
 
         // Don't fail the attendance record if emotion record fails (log it)
         if (emotionError) {
             console.error('Error storing emotion record:', emotionError);
-            // Continue anyway - attendance is already recorded
         }
 
-        // Store anonymous emotion data (increment count for this emotion/gender/department on this date)
-        const emotionConfidence = Math.round(primaryEmotion.Confidence * 100) / 100;
-        const { data: existingAnonymous, error: checkAnonymousError } = await supabaseAdmin
-            .from('anonymous_emotions')
-            .select('id, count, confidence')
-            .eq('date', today)
-            .eq('emotion', primaryEmotion.Type)
-            .eq('gender', employee.gender || null)
-            .eq('department', employee.department || null)
-            .single();
+        // Process anonymous emotion record
+        if (anonymousCheckResult.status === 'fulfilled') {
+            const { data: existingAnonymous, error: checkAnonymousError } = anonymousCheckResult.value;
 
-        if (checkAnonymousError && checkAnonymousError.code === 'PGRST116') {
-            // No existing record - insert new
-            const { error: insertAnonymousError } = await supabaseAdmin
-                .from('anonymous_emotions')
-                .insert([{
-                    date: today,
-                    emotion: primaryEmotion.Type,
-                    gender: employee.gender || null,
-                    department: employee.department || null,
-                    confidence: emotionConfidence,
-                    count: 1,
-                    timestamp: new Date().toISOString()
-                }]);
+            if (checkAnonymousError && checkAnonymousError.code === 'PGRST116') {
+                // No existing record - insert new
+                const { error: insertAnonymousError } = await supabaseAdmin
+                    .from('anonymous_emotions')
+                    .insert([{
+                        date: today,
+                        emotion: primaryEmotion.Type,
+                        gender: employee.gender || null,
+                        department: employee.department || null,
+                        confidence: emotionConfidence,
+                        count: 1,
+                        timestamp: new Date().toISOString()
+                    }]);
 
-            if (insertAnonymousError) {
-                console.error('Error storing anonymous emotion:', insertAnonymousError);
-            }
-        } else if (!checkAnonymousError && existingAnonymous) {
-            // Existing record - increment count and update confidence (average or max, using average for better representation)
-            const newCount = existingAnonymous.count + 1;
-            const existingConfidence = existingAnonymous.confidence || 0;
-            // Calculate weighted average confidence
-            const averageConfidence = ((existingConfidence * existingAnonymous.count) + emotionConfidence) / newCount;
-            
-            const { error: updateAnonymousError } = await supabaseAdmin
-                .from('anonymous_emotions')
-                .update({
-                    count: newCount,
-                    confidence: Math.round(averageConfidence * 100) / 100,
-                    timestamp: new Date().toISOString()
-                })
-                .eq('id', existingAnonymous.id);
+                if (insertAnonymousError) {
+                    console.error('Error storing anonymous emotion:', insertAnonymousError);
+                }
+            } else if (!checkAnonymousError && existingAnonymous) {
+                // Existing record - increment count and update confidence
+                const newCount = existingAnonymous.count + 1;
+                const existingConfidence = existingAnonymous.confidence || 0;
+                // Calculate weighted average confidence
+                const averageConfidence = ((existingConfidence * existingAnonymous.count) + emotionConfidence) / newCount;
+                
+                const { error: updateAnonymousError } = await supabaseAdmin
+                    .from('anonymous_emotions')
+                    .update({
+                        count: newCount,
+                        confidence: Math.round(averageConfidence * 100) / 100,
+                        timestamp: new Date().toISOString()
+                    })
+                    .eq('id', existingAnonymous.id);
 
-            if (updateAnonymousError) {
-                console.error('Error updating anonymous emotion:', updateAnonymousError);
+                if (updateAnonymousError) {
+                    console.error('Error updating anonymous emotion:', updateAnonymousError);
+                }
+            } else if (checkAnonymousError) {
+                console.error('Error checking anonymous emotion:', checkAnonymousError);
             }
         } else {
-            console.error('Error checking anonymous emotion:', checkAnonymousError);
+            console.error('Error checking anonymous emotion:', anonymousCheckResult.reason);
         }
 
         return NextResponse.json({

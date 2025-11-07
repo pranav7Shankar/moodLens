@@ -1,28 +1,60 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function HRLoginPage() {
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const router = useRouter();
 
     const submit = async (e) => {
         e.preventDefault();
         setError('');
+        
+        // Validation for signup
+        if (isSignUp) {
+            if (!password || password.length < 6) {
+                setError('Password must be at least 6 characters long');
+                return;
+            }
+            if (password !== confirmPassword) {
+                setError('Passwords do not match');
+                return;
+            }
+        }
+        
+        // Validation for login
+        if (!isSignUp) {
+            if (!name) {
+                setError('Name is required');
+                return;
+            }
+            if (!password) {
+                setError('Password is required');
+                return;
+            }
+        }
+        
         setLoading(true);
         try {
-            const res = await fetch('/api/hr/login', {
+            const endpoint = isSignUp ? '/api/hr/signup' : '/api/hr/login';
+            const body = isSignUp 
+                ? { name, email, password, role: 'HR' } 
+                : { name, password };
+            
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
+                body: JSON.stringify(body),
                 credentials: 'include'
             });
             const data = await res.json();
             if (!res.ok) {
-                setError(data.error || data.details || 'Invalid password');
+                setError(data.error || data.details || (isSignUp ? 'Failed to create account' : 'Invalid credentials'));
                 setLoading(false);
                 return;
             }
@@ -31,7 +63,7 @@ export default function HRLoginPage() {
                 window.location.href = '/hr';
             }, 100);
         } catch (e) {
-            console.error('Login error:', e);
+            console.error(isSignUp ? 'Signup error:' : 'Login error:', e);
             setError('Network error. Please check your connection and try again.');
             setLoading(false);
         }
@@ -81,31 +113,94 @@ export default function HRLoginPage() {
             
             {/* Content with relative positioning */}
             <div className="relative z-10 w-full flex items-center justify-center">
-            <form onSubmit={submit} className="w-full max-w-sm bg-[#1a1a2e]/90 backdrop-blur-sm border border-[#1e293b] rounded-xl p-6 shadow-xl">
+            <form onSubmit={submit} className="w-full max-w-sm bg-[#1a1a2e]/90 backdrop-blur-sm border border-[#1e293b] rounded-xl p-6 shadow-xl my-8">
                 <div className="mb-6 text-center">
                     <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#2563eb] to-[#1e40af] shadow-lg shadow-blue-500/20 mx-auto mb-4">
                         <span className="text-3xl">🔐</span>
                     </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">HR Admin Login</h1>
-                    <p className="text-sm text-slate-400">Enter your credentials to access the dashboard</p>
+                    <h1 className="text-2xl font-bold text-white mb-2">
+                        {isSignUp ? 'Create Account' : 'HR Admin Login'}
+                    </h1>
+                    <p className="text-sm text-slate-400">
+                        {isSignUp 
+                            ? 'Verify your HR credentials to create an account' 
+                            : 'HR personnel only - Access restricted to Human Resources department'}
+                    </p>
                 </div>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             className="w-full border border-[#1e293b] rounded-lg p-3 bg-[#0f0f23] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Enter Admin Password"
-                    required
+                            placeholder="Enter your full name"
+                            required
                             autoFocus
-                />
+                        />
                     </div>
+                    {isSignUp && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full border border-[#1e293b] rounded-lg p-3 bg-[#0f0f23] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="Enter your email address"
+                                required
+                            />
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full border border-[#1e293b] rounded-lg p-3 bg-[#0f0f23] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder={isSignUp ? "Enter a password (min 6 characters)" : "Enter your password"}
+                            required
+                            minLength={isSignUp ? 6 : undefined}
+                        />
+                    </div>
+                    {isSignUp && (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Confirm Password</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full border border-[#1e293b] rounded-lg p-3 bg-[#0f0f23] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Confirm your password"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+                        </>
+                    )}
                     {error && <div className="text-red-400 text-sm bg-red-900/20 border border-red-800/50 rounded-lg p-3">{error}</div>}
                     <button disabled={loading} className="w-full px-4 py-3 bg-gradient-to-r from-[#2563eb] to-[#1e40af] hover:from-[#1d4ed8] hover:to-[#1e3a8a] text-white rounded-lg font-semibold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {loading ? 'Signing in...' : 'Sign In'}
-                </button>
+                        {loading ? (isSignUp ? 'Creating account...' : 'Signing in...') : (isSignUp ? 'Sign Up' : 'Sign In')}
+                    </button>
+                    <div className="text-center mt-4">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsSignUp(!isSignUp);
+                                setError('');
+                                setName('');
+                                setEmail('');
+                                setPassword('');
+                                setConfirmPassword('');
+                            }}
+                            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+                        </button>
+                    </div>
                 </div>
             </form>
             </div>

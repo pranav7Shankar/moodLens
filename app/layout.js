@@ -1,15 +1,18 @@
 import "@/styles/globals.css";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export const metadata = {
-  title: "Mood Lens",
-  description: "AI-Powered Facial Recognition and Emotion Detection System",
+  title: "MoodLens - AI-Powered Facial Recognition and Emotion Detection",
+  description: "AI-Powered Facial Recognition and Emotion Detection System for HR Management",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </body>
     </html>
   );

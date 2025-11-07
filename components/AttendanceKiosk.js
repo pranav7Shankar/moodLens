@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import EmployeeDashboard from './EmployeeDashboard';
 
 export default function AttendanceKiosk() {
-    const [darkMode, setDarkMode] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
     const [stream, setStream] = useState(null);
     const [analyzing, setAnalyzing] = useState(false);
@@ -20,11 +20,6 @@ export default function AttendanceKiosk() {
     const intervalRef = useRef(null);
     const autoCaptureRef = useRef(null);
 
-    // Initialize dark mode
-    useEffect(() => {
-        const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(prefersDark);
-    }, []);
 
     // Start webcam (auto-start on mount)
     useEffect(() => {
@@ -38,6 +33,7 @@ export default function AttendanceKiosk() {
                 setStream(mediaStream);
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
+                    videoRef.current.muted = true; // Required for autoplay in some browsers
                     // Wait for video to be ready
                     await new Promise((resolve) => {
                         const video = videoRef.current;
@@ -45,13 +41,53 @@ export default function AttendanceKiosk() {
                             resolve();
                         } else {
                             video.onloadeddata = resolve;
+                            video.onloadedmetadata = resolve;
+                            // Fallback timeout
+                            setTimeout(resolve, 2000);
                         }
                     });
+                    // Force play
+                    try {
+                        await videoRef.current.play();
+                    } catch (playErr) {
+                        console.warn('Autoplay prevented:', playErr);
+                    }
                 }
                 setIsCapturing(true);
                 speak('Webcam started. Automatic face recognition is active.');
             } catch (err) {
-                setStatusMessage('Error accessing webcam: ' + err.message);
+                console.error('Webcam error:', err);
+                let errorMsg = 'Error accessing webcam: ' + err.message;
+                
+                // Provide helpful error messages
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMsg = 'Camera permission denied. Please allow camera access in your browser settings.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    errorMsg = 'No camera found. Please connect a camera device.';
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                    errorMsg = 'Camera is being used by another application. Please close other apps using the camera.';
+                } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                    errorMsg = 'Camera does not support the required settings. Trying with default settings...';
+                    // Retry with simpler constraints
+                    try {
+                        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                            video: true
+                        });
+                        setStream(fallbackStream);
+                        if (videoRef.current) {
+                            videoRef.current.srcObject = fallbackStream;
+                        }
+                        setIsCapturing(true);
+                        speak('Webcam started with default settings.');
+                        return;
+                    } catch (fallbackErr) {
+                        errorMsg = 'Unable to access camera. Please check your browser permissions and ensure you are using HTTPS.';
+                    }
+                } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    errorMsg = 'Camera requires HTTPS. Please access this site via HTTPS.';
+                }
+                
+                setStatusMessage(errorMsg);
                 speak('Error accessing webcam');
             }
         };
@@ -77,6 +113,7 @@ export default function AttendanceKiosk() {
             setStream(mediaStream);
             if (videoRef.current) {
                 videoRef.current.srcObject = mediaStream;
+                videoRef.current.muted = true; // Required for autoplay in some browsers
                 // Wait for video to be ready
                 await new Promise((resolve) => {
                     const video = videoRef.current;
@@ -84,13 +121,53 @@ export default function AttendanceKiosk() {
                         resolve();
                     } else {
                         video.onloadeddata = resolve;
+                        video.onloadedmetadata = resolve;
+                        // Fallback timeout
+                        setTimeout(resolve, 2000);
                     }
                 });
+                // Force play
+                try {
+                    await videoRef.current.play();
+                } catch (playErr) {
+                    console.warn('Autoplay prevented:', playErr);
+                }
             }
             setIsCapturing(true);
             speak('Webcam started. Ready for attendance.');
         } catch (err) {
-            setStatusMessage('Error accessing webcam: ' + err.message);
+            console.error('Webcam error:', err);
+            let errorMsg = 'Error accessing webcam: ' + err.message;
+            
+            // Provide helpful error messages
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errorMsg = 'Camera permission denied. Please allow camera access in your browser settings.';
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errorMsg = 'No camera found. Please connect a camera device.';
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                errorMsg = 'Camera is being used by another application. Please close other apps using the camera.';
+            } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+                errorMsg = 'Camera does not support the required settings. Trying with default settings...';
+                // Retry with simpler constraints
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                    setStream(fallbackStream);
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = fallbackStream;
+                    }
+                    setIsCapturing(true);
+                    speak('Webcam started with default settings.');
+                    return;
+                } catch (fallbackErr) {
+                    errorMsg = 'Unable to access camera. Please check your browser permissions and ensure you are using HTTPS.';
+                }
+            } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                errorMsg = 'Camera requires HTTPS. Please access this site via HTTPS.';
+            }
+            
+            setStatusMessage(errorMsg);
             speak('Error accessing webcam');
         }
     };
@@ -359,7 +436,7 @@ export default function AttendanceKiosk() {
                     (blob) => {
                         if (blob) {
                             resolve(blob);
-                        } else {
+        } else {
                             reject(new Error('Failed to create image blob'));
                         }
                     },
@@ -398,6 +475,7 @@ export default function AttendanceKiosk() {
         return () => {
             stopAutoCapture();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoCapture, isCapturing, captureInterval, isProcessing]);
 
     const themeClasses = 'min-h-screen bg-[#0f0f23] text-white relative overflow-hidden';
@@ -451,11 +529,11 @@ export default function AttendanceKiosk() {
                 <div className="max-w-7xl mx-auto px-4 py-4">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#2563eb] to-[#1e40af] shadow-lg shadow-blue-500/20">
-                                <span className="text-2xl">👤</span>
+                            <div className="flex items-center justify-center">
+                                <img src="/logo.png" alt="MoodLens Logo" className="w-16 h-16 md:w-24 md:h-24 object-contain" />
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-bold">MoodLens Attendance Kiosk</h1>
+                            <div className="hidden md:block">
+                                <h1 className="text-3xl md:text-4xl">MoodLens Kiosk</h1>
                                 <p className="text-sm text-slate-400">
                                     AI-Powered Check-In System
                                 </p>
@@ -465,12 +543,6 @@ export default function AttendanceKiosk() {
                             <Link href="/hr/login" className="px-3 py-2 rounded-lg text-white transition-colors bg-[#16213e] hover:bg-[#1e293b] border border-[#1e293b]">
                                 🔐 HR Login
                             </Link>
-                            <button
-                                onClick={() => setDarkMode(!darkMode)}
-                                className="px-4 py-2 rounded-lg bg-[#16213e] hover:bg-[#1e293b] border border-[#1e293b] transition-colors"
-                            >
-                                🌙
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -478,11 +550,17 @@ export default function AttendanceKiosk() {
 
             <div className="max-w-7xl mx-auto px-4 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Main Camera View */}
-                    <div className="lg:col-span-2">
+                    {/* Left Side - Dashboard (Full Height) */}
+                    <div className="lg:col-span-1">
+                        <EmployeeDashboard />
+                    </div>
+
+                    {/* Right Side - Camera, Recent Check-ins & Instructions */}
+                    <div className="lg:col-span-2 space-y-6">
+                        {/* Main Camera View */}
                         <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
                             <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xl font-bold text-white">Camera View</h2>
+                                <h2 className="text-xl font-bold text-white orbitron">Attendance Kiosk</h2>
                                 <div className="flex items-center space-x-2">
                                     {isCapturing && (
                                         <span className="flex items-center">
@@ -502,12 +580,12 @@ export default function AttendanceKiosk() {
                                             {statusMessage.includes('Error') ? 'Camera failed to start' : 'Starting camera...'}
                                         </p>
                                         {statusMessage.includes('Error') && (
-                                            <button
-                                                onClick={startWebcam}
+                                        <button
+                                            onClick={startWebcam}
                                                 className="px-6 py-3 bg-gradient-to-r from-[#2563eb] to-[#1e40af] hover:from-[#1d4ed8] hover:to-[#1e3a8a] text-white rounded-lg font-semibold transition-all shadow-lg shadow-blue-500/20"
-                                            >
+                                        >
                                                 Retry Start Webcam
-                                            </button>
+                                        </button>
                                         )}
                                     </div>
                                 ) : (
@@ -516,7 +594,9 @@ export default function AttendanceKiosk() {
                                             ref={videoRef}
                                             autoPlay
                                             playsInline
+                                            muted
                                             className="w-full h-full object-cover"
+                                            style={{ backgroundColor: '#000' }}
                                         />
                                         {isProcessing && (
                                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -533,7 +613,6 @@ export default function AttendanceKiosk() {
                             </div>
 
                             <canvas ref={canvasRef} className="hidden" />
-
 
                             {/* Status Message */}
                             {statusMessage && (
@@ -571,84 +650,84 @@ export default function AttendanceKiosk() {
                                                     <span className="text-sm">{isProcessing ? 'Processing...' : 'Active'}</span>
                                                 </div>
                                             </div>
-                                            <div>
+                                                <div>
                                                 <label className="text-sm mb-2 block">Capture Interval: {captureInterval}s</label>
-                                                <input
-                                                    type="range"
+                                                    <input
+                                                        type="range"
                                                     min="2"
                                                     max="10"
-                                                    value={captureInterval}
-                                                    onChange={(e) => setCaptureInterval(Number(e.target.value))}
-                                                    className="w-full"
-                                                />
-                                            </div>
+                                                        value={captureInterval}
+                                                        onChange={(e) => setCaptureInterval(Number(e.target.value))}
+                                                        className="w-full"
+                                                    />
+                                                </div>
                                         </div>
                                     </>
                                 )}
                             </div>
                         </div>
-                    </div>
 
-                    {/* Sidebar - Instructions & Log */}
-                    <div className="space-y-6">
-                        {/* Instructions */}
-                        <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
-                            <h3 className="text-lg font-bold mb-4 text-white">Instructions</h3>
-                            <ul className="space-y-2 text-sm text-slate-300">
-                                <li className="flex items-start">
-                                    <span className="mr-2">1.</span>
-                                    <span>Position your face clearly in the frame</span>
-                                </li>
-                                <li className="flex items-start">
-                                    <span className="mr-2">2.</span>
-                                    <span>The system automatically captures and recognizes your face every {captureInterval} seconds</span>
-                                </li>
-                                <li className="flex items-start">
-                                    <span className="mr-2">3.</span>
-                                    <span>No button clicks needed - just stand in front of the camera!</span>
-                                </li>
-                                <li className="flex items-start">
-                                    <span className="mr-2">4.</span>
-                                    <span>Attendance is automatically recorded when your face is recognized</span>
-                                </li>
-                                <li className="flex items-start">
-                                    <span className="mr-2">5.</span>
-                                    <span>Look for the green status message when attendance is marked</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        {/* Attendance Log */}
-                        <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
-                            <h3 className="text-lg font-bold mb-4 text-white">Recent Check-Ins</h3>
-                            {attendanceLog.length === 0 ? (
-                                <p className="text-center py-8 text-slate-400">
-                                    No check-ins yet
-                                </p>
-                            ) : (
-                                <div className="space-y-3 max-h-96 overflow-y-auto">
-                                    {attendanceLog.map((log) => (
-                                        <div
-                                            key={log.id}
-                                            className="p-3 rounded-lg bg-[#1e293b] border border-[#334155]"
-                                        >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="text-sm font-semibold">
-                                                    {log.name || 'Unknown'}
-                                                </span>
+                        {/* Recent Check-ins & Instructions - Horizontal Layout */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Attendance Log */}
+                            <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
+                                <h3 className="text-lg font-bold mb-4 text-white orbitron">Recent Check-Ins</h3>
+                                {attendanceLog.length === 0 ? (
+                                    <p className="text-center py-8 text-slate-400">
+                                        No check-ins yet
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-3">
+                                        {attendanceLog.map((log) => (
+                                            <div
+                                                key={log.id}
+                                                className="p-3 rounded-lg bg-[#1e293b] border border-[#334155] min-w-[150px] flex-shrink-0"
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-semibold text-white mb-1 orbitron">
+                                                        {log.name || 'Unknown'}
+                                                    </span>
+                                                    <p className="text-slate-400 text-xs">
+                                                        {log.timestamp}
+                                                    </p>
+                                                    {log.department && (
+                                                        <p className="text-slate-500 text-xs mt-1">
+                                                            {log.department}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <p className="text-slate-400 text-xs">
-                                                {log.timestamp}
-                                            </p>
-                                            {log.department && (
-                                                <p className="text-slate-500 text-xs">
-                                                    {log.department}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Instructions */}
+                            <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
+                                <h3 className="text-lg font-bold mb-4 text-white orbitron">Instructions</h3>
+                                <ul className="space-y-2 text-sm text-slate-300">
+                                    <li className="flex items-start">
+                                        <span className="mr-2">1.</span>
+                                        <span>Position your face clearly in the frame</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <span className="mr-2">2.</span>
+                                        <span>The system automatically captures and recognizes your face every {captureInterval} seconds</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <span className="mr-2">3.</span>
+                                        <span>No button clicks needed - just stand in front of the camera!</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <span className="mr-2">4.</span>
+                                        <span>Attendance is automatically recorded when your face is recognized</span>
+                                    </li>
+                                    <li className="flex items-start">
+                                        <span className="mr-2">5.</span>
+                                        <span>Look for the green status message when attendance is marked</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

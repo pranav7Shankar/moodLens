@@ -24,6 +24,7 @@ export async function POST(request) {
         const gender = formData.get('gender') || '';
         const age = Number(formData.get('age') || 0);
         const department = formData.get('department') || '';
+        const email = formData.get('email') || '';
         const imageFile = formData.get('image');
 
         let employee_image = null;
@@ -44,7 +45,7 @@ export async function POST(request) {
 
         const { data, error } = await supabaseAdmin
             .from('employees')
-            .insert([{ name, gender, age, department, employee_image }])
+            .insert([{ name, gender, age, department, email, employee_image }])
             .select()
             .single();
         if (error) throw error;

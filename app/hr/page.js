@@ -1,23 +1,35 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, RadialBarChart, RadialBar } from 'recharts';
+import { RadialBarChart, RadialBar, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
-import Spline from '@splinetool/react-spline';
+import Script from 'next/script';
+import EmployeeDatabase from '@/components/hr/EmployeeDatabase';
+import AddEmployeeForm from '@/components/hr/AddEmployeeForm';
+import AttendanceStatus from '@/components/hr/AttendanceStatus';
+import MoodLens from '@/components/hr/MoodLens';
+import AnnouncementsSection from '@/components/hr/AnnouncementsSection';
 
 export default function HRDashboard() {
     const router = useRouter();
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [form, setForm] = useState({ name: '', gender: '', age: '', department: '' });
+    const [currentUser, setCurrentUser] = useState(null);
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [form, setForm] = useState({ name: '', gender: '', age: '', department: '', email: '' });
     const [image, setImage] = useState(null);
     const [editing, setEditing] = useState(null);
     const [showEditSidebar, setShowEditSidebar] = useState(false);
-    const [editForm, setEditForm] = useState({ name: '', gender: '', age: '', department: '' });
+    const [editForm, setEditForm] = useState({ name: '', gender: '', age: '', department: '', email: '' });
     const [editImage, setEditImage] = useState(null);
-    const [activeTab, setActiveTab] = useState('employees'); // 'employees', 'management', 'attendance', 'emotions'
+    const [activeTab, setActiveTab] = useState('employees'); // 'employees', 'management', 'attendance', 'emotions', 'dashboard'
     const [employeeDepartmentFilter, setEmployeeDepartmentFilter] = useState('all');
+    const [announcements, setAnnouncements] = useState([]);
+    const [announcementTitle, setAnnouncementTitle] = useState('');
+    const [announcementMessage, setAnnouncementMessage] = useState('');
+    const [announcementPriority, setAnnouncementPriority] = useState('normal');
+    const [announcementSaving, setAnnouncementSaving] = useState(false);
     const [showEmployeeFilter, setShowEmployeeFilter] = useState(false);
     const [attendanceRecords, setAttendanceRecords] = useState([]);
     const [attendanceLoading, setAttendanceLoading] = useState(false);
@@ -39,6 +51,7 @@ export default function HRDashboard() {
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     const [attendanceFilter, setAttendanceFilter] = useState('all'); // 'all', 'present', 'absent'
     const [emotionViewMode, setEmotionViewMode] = useState('positiveNegative'); // 'positiveNegative' or 'individual'
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     const fetchEmployees = async () => {
         setLoading(true);
@@ -53,7 +66,36 @@ export default function HRDashboard() {
         }
     };
 
-    useEffect(() => { fetchEmployees(); }, []);
+    const fetchCurrentUser = async () => {
+        try {
+            const res = await fetch('/api/hr/me', { credentials: 'include' });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && !data.error) {
+                    setCurrentUser(data);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch current user:', e);
+        }
+    };
+
+    const fetchAnnouncements = async () => {
+        try {
+            const res = await fetch('/api/announcements');
+            if (res.ok) {
+                const data = await res.json();
+                setAnnouncements(data.announcements || []);
+            }
+        } catch (e) {
+            console.error('Failed to fetch announcements:', e);
+        }
+    };
+
+    useEffect(() => { 
+        fetchEmployees();
+        fetchCurrentUser();
+    }, []);
 
     // Close employee filter dropdown when clicking outside
     useEffect(() => {
@@ -156,11 +198,12 @@ export default function HRDashboard() {
         fd.append('gender', form.gender);
         fd.append('age', form.age);
         fd.append('department', form.department);
+        fd.append('email', form.email);
         if (image) fd.append('image', image);
         try {
             const res = await fetch('/api/employees', { method: 'POST', body: fd });
             if (!res.ok) throw new Error('Create failed');
-            setForm({ name: '', gender: '', age: '', department: '' });
+            setForm({ name: '', gender: '', age: '', department: '', email: '' });
             setImage(null);
             await fetchEmployees();
         } catch (e) {
@@ -170,7 +213,7 @@ export default function HRDashboard() {
 
     const startEdit = (emp) => {
         setEditing(emp);
-        setEditForm({ name: emp.name || '', gender: emp.gender || '', age: emp.age || '', department: emp.department || '' });
+        setEditForm({ name: emp.name || '', gender: emp.gender || '', age: emp.age || '', department: emp.department || '', email: emp.email || '' });
         setEditImage(null);
         setShowEditSidebar(true);
     };
@@ -183,12 +226,13 @@ export default function HRDashboard() {
         if (editForm.gender) fd.append('gender', editForm.gender);
         if (editForm.age) fd.append('age', editForm.age);
         if (editForm.department) fd.append('department', editForm.department);
+        if (editForm.email) fd.append('email', editForm.email);
         if (editImage) fd.append('image', editImage);
         try {
             const res = await fetch(`/api/employees/${editing.id}`, { method: 'PUT', body: fd });
             if (!res.ok) throw new Error('Update failed');
             setEditing(null);
-            setEditForm({ name: '', gender: '', age: '', department: '' });
+            setEditForm({ name: '', gender: '', age: '', department: '', email: '' });
             setEditImage(null);
             setShowEditSidebar(false);
             await fetchEmployees();
@@ -200,7 +244,7 @@ export default function HRDashboard() {
     const closeEditSidebar = () => {
         setShowEditSidebar(false);
         setEditing(null);
-        setEditForm({ name: '', gender: '', age: '', department: '' });
+        setEditForm({ name: '', gender: '', age: '', department: '', email: '' });
         setEditImage(null);
     };
 
@@ -217,6 +261,7 @@ export default function HRDashboard() {
 
     const logout = async () => {
         await fetch('/api/hr/logout', { method: 'POST' });
+        setCurrentUser(null);
         router.push('/hr/login');
     };
 
@@ -524,101 +569,250 @@ export default function HRDashboard() {
     const emotionData = getEmotionData();
 
     return (
-        <div className="h-screen bg-[#0f0f23] text-white flex flex-col overflow-hidden">
+        <>
+            <Script 
+                src="https://unpkg.com/@splinetool/viewer@1.10.96/build/spline-viewer.js" 
+                strategy="lazyOnload"
+                type="module"
+            />
+            <div className="h-screen bg-[#0f0f23] text-white flex flex-col overflow-hidden">
             {/* Header */}
             <div className="bg-[#1a1a2e] border-b border-[#1e293b] flex-shrink-0">
                 <div className="max-w-full mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
-                        <h1 className="text-2xl font-bold text-white">HR Dashboard</h1>
-                        <button onClick={logout} className="px-3 py-1 bg-[#16213e] rounded hover:bg-[#1e293b] border border-[#1e293b] transition-colors text-white">Logout</button>
+                        <div className="flex items-center">
+                            {/* Hamburger Menu Button for Mobile */}
+                            <button
+                                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                                className="lg:hidden p-2 rounded hover:bg-[#16213e] transition-colors text-white mr-3"
+                                aria-label="Toggle sidebar"
+                            >
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    strokeWidth={2}
+                                    stroke="currentColor"
+                                    className="w-6 h-6"
+                                >
+                                    {mobileSidebarOpen ? (
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    ) : (
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                                    )}
+                                </svg>
+                            </button>
+                            <div className="flex items-center justify-center">
+                                <img src="/logo.png" alt="MoodLens Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain" />
+                            </div>
+                            <div className="hidden md:block">
+                                <h1 className="text-3xl md:text-4xl text-white">MoodLens</h1>
+                            </div>
+                        </div>
+                        {/* User Menu */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowUserMenu(!showUserMenu)}
+                                className="relative p-2 rounded-lg hover:bg-[#16213e] transition-all duration-300 group"
+                                aria-label="User menu"
+                            >
+                                {/* Animated User Icon */}
+                                <div className="relative w-10 h-10">
+                                    {currentUser ? (
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#2563eb] to-[#1e40af] flex items-center justify-center text-white font-semibold shadow-lg shadow-blue-500/20 transition-transform duration-300 group-hover:scale-110 group-hover:shadow-blue-500/40">
+                                            <span className="text-base">{currentUser.name.charAt(0).toUpperCase()}</span>
+                                        </div>
+                                    ) : (
+                                        <svg 
+                                            xmlns="http://www.w3.org/2000/svg" 
+                                            fill="none" 
+                                            viewBox="0 0 24 24" 
+                                            strokeWidth={2} 
+                                            stroke="currentColor" 
+                                            className="w-10 h-10 text-slate-400 group-hover:text-white transition-colors duration-300 animate-pulse"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                        </svg>
+                                    )}
+                                    {/* Animated ring indicator */}
+                                    <div className="absolute inset-0 rounded-full border-2 border-blue-500/50 opacity-0 group-hover:opacity-100 animate-ping"></div>
+                                </div>
+                            </button>
+
+                            {/* User Menu Dropdown */}
+                            {showUserMenu && (
+                                <>
+                                    {/* Backdrop */}
+                                    <div 
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => setShowUserMenu(false)}
+                                    ></div>
+                                    {/* Dropdown */}
+                                    <div className="absolute right-0 mt-2 w-64 bg-[#16213e] border border-[#1e293b] rounded-xl shadow-2xl z-50 overflow-hidden">
+                                        {/* User Info Section */}
+                                        {currentUser ? (
+                                            <div className="p-4 border-b border-[#1e293b]">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#2563eb] to-[#1e40af] flex items-center justify-center text-white font-semibold text-lg shadow-lg shadow-blue-500/20">
+                                                        {currentUser.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold text-white truncate">{currentUser.name}</p>
+                                                        {currentUser.email && (
+                                                            <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
+                                                        )}
+                                                        {currentUser.department && (
+                                                            <p className="text-xs text-blue-400 mt-1">{currentUser.department}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 border-b border-[#1e293b]">
+                                                <p className="text-sm text-slate-400">Loading user info...</p>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Logout Button */}
+                                        <div className="p-2">
+                                            <button
+                                                onClick={logout}
+                                                className="w-full px-4 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 rounded-lg text-red-400 font-medium transition-all duration-300 flex items-center justify-center gap-2 group"
+                                            >
+                                                <svg 
+                                                    xmlns="http://www.w3.org/2000/svg" 
+                                                    fill="none" 
+                                                    viewBox="0 0 24 24" 
+                                                    strokeWidth={2} 
+                                                    stroke="currentColor" 
+                                                    className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                                                </svg>
+                                                <span>Logout</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {error && <div className="max-w-full mx-auto px-4 pt-4 text-red-400 bg-red-900/20 border border-red-800/50 rounded-lg p-3 flex-shrink-0">{error}</div>}
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden relative">
+                {/* Mobile Overlay */}
+                {mobileSidebarOpen && (
+                    <div
+                        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                        onClick={() => setMobileSidebarOpen(false)}
+                    />
+                )}
+
                 {/* Left Sidebar */}
-                <div className="w-64 bg-[#0d1117] border-r border-[#1e293b] flex-shrink-0 flex flex-col">
-                    <nav className="p-4 flex-1">
+                <div className={`fixed lg:static inset-y-0 left-0 z-50 lg:z-auto w-64 bg-[#0d1117] border-r border-[#1e293b] flex-shrink-0 flex flex-col transform transition-transform duration-300 ease-in-out ${
+                    mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                }`}>
+                    {/* Mobile Sidebar Header */}
+                    <div className="lg:hidden p-4 border-b border-[#1e293b] flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <img src="/logo.png" alt="MoodLens Logo" className="w-10 h-10 object-contain" />
+                            <h2 className="text-lg font-semibold text-white orbitron">Menu</h2>
+                        </div>
                         <button
-                            onClick={() => setActiveTab('employees')}
-                            className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors mb-2 ${
+                            onClick={() => setMobileSidebarOpen(false)}
+                            className="p-2 rounded hover:bg-[#16213e] transition-colors text-white"
+                            aria-label="Close sidebar"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <nav className="p-4 flex-1 overflow-y-auto">
+                        <button
+                            onClick={() => {
+                                setActiveTab('employees');
+                                setMobileSidebarOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
                                 activeTab === 'employees'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
                             Employee Database
                         </button>
                         <button
-                            onClick={() => setActiveTab('management')}
-                            className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors mb-2 ${
+                            onClick={() => {
+                                setActiveTab('management');
+                                setMobileSidebarOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
                                 activeTab === 'management'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
                             Add Employee
                         </button>
                         <button
-                            onClick={() => setActiveTab('attendance')}
-                            className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors mb-2 ${
+                            onClick={() => {
+                                setActiveTab('attendance');
+                                setMobileSidebarOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
                                 activeTab === 'attendance'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
                             Attendance Status
                         </button>
                         <button
-                            onClick={() => setActiveTab('emotions')}
-                            className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-colors ${
+                            onClick={() => {
+                                setActiveTab('emotions');
+                                setMobileSidebarOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-sm md:text-base orbitron ${
                                 activeTab === 'emotions'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
-                            MoodLens
+                            Mood Dashboard
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('dashboard');
+                                setMobileSidebarOpen(false);
+                                fetchAnnouncements();
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors text-sm md:text-base orbitron ${
+                                activeTab === 'dashboard'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
+                            }`}
+                        >
+                            Announcements
                         </button>
                     </nav>
                     
-                    {/* Spline 3D Viewer */}
-                    <div className="w-full h-64 border-t border-[#1e293b] overflow-hidden relative">
-                        <div className="absolute inset-0" style={{ transform: 'translateX(-10%)', width: '120%' }}>
-                            <Spline 
-                                scene="https://prod.spline.design/e1REzfr4Htu1fYPj/scene.splinecode"
-                                className="w-full h-full"
-                                onLoad={(spline) => {
-                                    // Adjust camera to show full model, especially the right side
-                                    if (spline) {
-                                        // Try to find and adjust the camera
-                                        const camera = spline.findObjectByName('Camera') || spline.findObjectByName('camera');
-                                        if (camera) {
-                                            // Move camera left to show more of the right side
-                                            camera.position.x -= 30;
-                                            // Zoom out slightly to see more
-                                            if (camera.zoom !== undefined) {
-                                                camera.zoom = 0.85;
-                                            }
-                                        }
-                                        // Alternative: adjust through spline's camera methods
-                                        try {
-                                            if (spline.setZoom) {
-                                                spline.setZoom(0.85);
-                                            }
-                                        } catch (e) {
-                                            console.log('Could not set zoom:', e);
-                                        }
-                                    }
-                                }}
-                            />
-                        </div>
+                    {/* Spline 3D Viewer - Hidden on mobile, visible on larger screens */}
+                    <div className="hidden lg:block w-full h-64 overflow-hidden p-0 m-0 relative">
+                        <spline-viewer 
+                            url="https://prod.spline.design/e1REzfr4Htu1fYPj/scene.splinecode"
+                            style={{ width: '100%', height: '100%', margin: 0, padding: 0 }}
+                        />
+                        {/* Gradient overlay to blend with sidebar */}
+                        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#0d1117] to-transparent pointer-events-none"></div>
                     </div>
                 </div>
 
                 {/* Main Content Area */}
-                <div className="flex-1 px-6 py-6 bg-[#0f0f23] overflow-y-auto relative">
+                <div className="flex-1 px-3 md:px-6 py-4 md:py-6 bg-[#0f0f23] overflow-y-auto relative w-full">
                     {/* Animated Background Elements */}
                     <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                         {/* Animated gradient orbs - Professional blue/slate tones */}
@@ -664,310 +858,40 @@ export default function HRDashboard() {
 
             {/* Employee Database Tab */}
             {activeTab === 'employees' && (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold">Employee Database</h2>
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-400">
-                                ({employeeDepartmentFilter === 'all' ? employees.length : employees.filter(emp => emp.department === employeeDepartmentFilter).length} employees)
-                            </span>
-                            <div className="relative employee-filter-container">
-                                <button
-                                    onClick={() => setShowEmployeeFilter(!showEmployeeFilter)}
-                                    className={`p-2 border rounded hover:bg-[#334155] transition-colors ${
-                                        showEmployeeFilter ? 'bg-[#334155] border-[#475569]' : 'bg-[#1e293b] border-[#334155]'
-                                    }`}
-                                    title="Filter by Department"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                                    </svg>
-                                </button>
-                                {showEmployeeFilter && (
-                                    <div className="absolute right-0 mt-2 bg-[#16213e] border border-[#1e293b] rounded-lg shadow-xl z-10 min-w-[180px]">
-                                        <div className="p-2">
-                                            <select
-                                                value={employeeDepartmentFilter}
-                                                onChange={(e) => {
-                                                    setEmployeeDepartmentFilter(e.target.value);
-                                                    setShowEmployeeFilter(false);
-                                                }}
-                                                className="w-full px-2 py-1.5 border border-[#334155] rounded bg-[#1e293b] text-white text-sm"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <option value="all" className="bg-[#1e293b] text-white">All Departments</option>
-                                                {[...new Set(employees.map(emp => emp.department).filter(Boolean))].map(dept => (
-                                                    <option key={dept} value={dept} className="bg-[#1e293b] text-white">{dept}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    {loading ? (
-                        <div className="text-center py-12 text-slate-400">Loading...</div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {employees
-                                .filter(emp => employeeDepartmentFilter === 'all' || emp.department === employeeDepartmentFilter)
-                                .map(emp => (
-                                <div key={emp.id} className="border border-[#1e293b] rounded-xl p-3 bg-[#16213e] hover:bg-[#1a1a2e] transition-all hover:border-[#334155] shadow-sm flex gap-3 min-h-[180px]">
-                                    {/* Employee Image - Left Side */}
-                                    <div className="flex-shrink-0">
-                                        {emp.employee_image ? (
-                                            <img 
-                                                src={emp.employee_image} 
-                                                alt={emp.name} 
-                                                className="w-20 h-full min-h-[160px] object-cover rounded-lg border border-[#334155]" 
-                                            />
-                                        ) : (
-                                            <div className="w-20 h-full min-h-[160px] rounded-lg bg-[#1e293b] flex items-center justify-center border border-[#334155]">
-                                                <span className="text-4xl">👤</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    {/* Employee Details - Right Side */}
-                                    <div className="flex-1 flex flex-col justify-between min-w-0">
-                                        <div className="space-y-2">
-                                            <h3 className="font-semibold text-base text-white truncate">{emp.name}</h3>
-                                            <div className="text-blue-400 font-medium text-sm">{emp.department || 'No Department'}</div>
-                                            <div className="text-xs space-y-1.5">
-                                                <div>
-                                                    <span className="text-slate-500">Gender: </span>
-                                                    <span className="text-slate-300">{emp.gender || 'N/A'}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-slate-500">Age: </span>
-                                                    <span className="text-slate-300">{emp.age || 'N/A'}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2 mt-3">
-                                            <button 
-                                                onClick={() => startEdit(emp)} 
-                                                className="p-2 bg-gradient-to-br from-[#2563eb] to-[#1e40af] text-white rounded-lg hover:from-[#1d4ed8] hover:to-[#1e3a8a] transition-all shadow-md shadow-blue-500/20 flex items-center justify-center"
-                                                title="Edit Employee"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                                </svg>
-                                            </button>
-                                            <button 
-                                                onClick={() => remove(emp)} 
-                                                className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center"
-                                                title="Delete Employee"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                <EmployeeDatabase
+                    employees={employees}
+                    loading={loading}
+                    employeeDepartmentFilter={employeeDepartmentFilter}
+                    setEmployeeDepartmentFilter={setEmployeeDepartmentFilter}
+                    showEmployeeFilter={showEmployeeFilter}
+                    setShowEmployeeFilter={setShowEmployeeFilter}
+                    startEdit={startEdit}
+                    remove={remove}
+                />
             )}
 
             {/* Add Employee Tab */}
             {activeTab === 'management' && (
-                <div className="space-y-6 flex flex-col items-center justify-center min-h-[60vh]">
-                    <h2 className="text-xl font-bold w-full text-center">Add Employee</h2>
-                    <div className="w-full max-w-lg">
-                        <form onSubmit={createEmployee} className="border border-[#1e293b] rounded-2xl p-6 bg-[#16213e] shadow-xl">
-                            <div className="mb-4 text-center">
-                                <div className="w-14 h-14 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#2563eb] to-[#1e40af] shadow-lg shadow-blue-500/20 mx-auto mb-3">
-                                    <span className="text-2xl">➕</span>
-                                </div>
-                                <h2 className="text-xl font-bold text-white">Add New Employee</h2>
-                            </div>
-                            
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
-                                    <input 
-                                        className="border border-[#334155] rounded-lg p-3 w-full bg-[#1e293b] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
-                                        placeholder="Enter employee name" 
-                                        value={form.name} 
-                                        onChange={e => setForm({ ...form, name: e.target.value })} 
-                                        required
-                                    />
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
-                                        <select
-                                            className="border border-[#334155] rounded-lg p-3 w-full bg-[#1e293b] text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                            value={form.gender}
-                                            onChange={e => setForm({ ...form, gender: e.target.value })}
-                                            required
-                                        >
-                                            <option value="" className="bg-[#1e293b] text-white">Select Gender</option>
-                                            <option value="Male" className="bg-[#1e293b] text-white">Male</option>
-                                            <option value="Female" className="bg-[#1e293b] text-white">Female</option>
-                                            <option value="Other" className="bg-[#1e293b] text-white">Other</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">Age</label>
-                                        <input 
-                                            className="border border-[#334155] rounded-lg p-3 w-full bg-[#1e293b] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
-                                            placeholder="Age" 
-                                            type="number" 
-                                            min="18"
-                                            max="100"
-                                            value={form.age} 
-                                            onChange={e => setForm({ ...form, age: e.target.value })} 
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">Department</label>
-                                    <input 
-                                        className="border border-[#334155] rounded-lg p-3 w-full bg-[#1e293b] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
-                                        placeholder="Enter department name" 
-                                        value={form.department} 
-                                        onChange={e => setForm({ ...form, department: e.target.value })} 
-                                        required
-                                    />
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">Employee Photo</label>
-                                    <div className="border border-[#334155] rounded-lg p-3 bg-[#1e293b] hover:border-blue-500/50 transition-colors">
-                                        <input 
-                                            className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer cursor-pointer" 
-                                            type="file" 
-                                            accept="image/*" 
-                                            onChange={e => setImage(e.target.files?.[0] || null)} 
-                                        />
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-1">Upload a clear photo of the employee's face</p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-3 mt-4">
-                                <button 
-                                    type="submit"
-                                    className="flex-1 px-6 py-3 bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white rounded-lg font-semibold hover:from-[#1d4ed8] hover:to-[#1e3a8a] transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30"
-                                >
-                                    Add Employee
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <AddEmployeeForm
+                    form={form}
+                    setForm={setForm}
+                    image={image}
+                    setImage={setImage}
+                    createEmployee={createEmployee}
+                />
             )}
 
             {/* Attendance Status Tab - Section 1 */}
             {activeTab === 'attendance' && (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold">Attendance Status</h2>
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium">Date:</label>
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                            />
-                            <select
-                                value={attendanceFilter}
-                                onChange={(e) => setAttendanceFilter(e.target.value)}
-                                className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                            >
-                                <option value="all">All</option>
-                                <option value="present">Present</option>
-                                <option value="absent">Absent</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {attendanceLoading ? (
-                        <div className="text-center py-12 text-slate-500">Loading attendance records...</div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {attendanceStatus
-                                .filter(emp => {
-                                    if (attendanceFilter === 'all') return true;
-                                    if (attendanceFilter === 'present') return emp.present === true;
-                                    if (attendanceFilter === 'absent') return emp.present === false;
-                                    return true;
-                                })
-                                .map(emp => (
-                                <div
-                                    key={emp.id}
-                                    onClick={() => fetchEmployeeHistory(emp.id, emp.name)}
-                                    className={`border rounded-xl p-4 shadow-sm transition-all cursor-pointer hover:shadow-md ${
-                                        emp.present
-                                            ? 'bg-green-900/20 border-green-700/50 hover:border-green-600/50'
-                                            : 'bg-[#16213e] border-[#1e293b] hover:border-[#334155]'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3 mb-2">
-                                        {emp.employee_image && (
-                                            <img
-                                                src={emp.employee_image}
-                                                alt={emp.name}
-                                                className="w-12 h-12 object-cover rounded-full"
-                                            />
-                                        )}
-                                        <div className="flex-1">
-                                            <div className="font-semibold text-white">{emp.name}</div>
-                                            <div className="text-xs text-slate-400">{emp.department}</div>
-                                        </div>
-                                        <div
-                                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                                emp.present
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-slate-400 text-white'
-                                            }`}
-                                        >
-                                            {emp.present ? '✓ Present' : '✗ Absent'}
-                                        </div>
-                                    </div>
-                                    {emp.attendanceRecord && (
-                                        <div className="mt-3 pt-3">
-                                            <div className="flex items-center justify-between text-sm">
-                                                <span className="text-slate-600">Time:</span>
-                                                <span className="text-xs text-slate-500">
-                                                    {new Date(emp.attendanceRecord.timestamp).toLocaleTimeString()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="mt-2 pt-2">
-                                        <p className="text-xs text-slate-500 text-center">Click to view history</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {attendanceStatus.filter(emp => {
-                        if (attendanceFilter === 'all') return true;
-                        if (attendanceFilter === 'present') return emp.present === true;
-                        if (attendanceFilter === 'absent') return emp.present === false;
-                        return true;
-                    }).length === 0 && !attendanceLoading && (
-                        <div className="text-center py-12 bg-[#16213e] rounded-xl border border-[#1e293b]">
-                            <p className="text-slate-300">
-                                {attendanceFilter === 'all' 
-                                    ? 'No employees found. Add employees first.' 
-                                    : `No ${attendanceFilter} employees found for this date.`}
-                            </p>
-                        </div>
-                    )}
-                </div>
+                <AttendanceStatus
+                    selectedDate={selectedDate}
+                    setSelectedDate={setSelectedDate}
+                    attendanceFilter={attendanceFilter}
+                    setAttendanceFilter={setAttendanceFilter}
+                    attendanceLoading={attendanceLoading}
+                    attendanceStatus={attendanceStatus}
+                    fetchEmployeeHistory={fetchEmployeeHistory}
+                />
             )}
 
             {/* Employee Attendance History Modal */}
@@ -975,7 +899,7 @@ export default function HRDashboard() {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeEmployeeModal}>
                     <div className="bg-[#1a1a2e] rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden border border-[#1e293b]" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 border-b border-[#1e293b] flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-white">Attendance History - {selectedEmployee.name}</h2>
+                            <h2 className="text-2xl font-bold text-white orbitron">Attendance History - {selectedEmployee.name}</h2>
                             <button
                                 onClick={closeEmployeeModal}
                                 className="text-slate-400 hover:text-white text-2xl font-bold"
@@ -992,7 +916,7 @@ export default function HRDashboard() {
                                     <div className="flex flex-col gap-4 min-w-0">
                                         {/* Calendar */}
                                         <div className="border rounded-xl p-3 bg-[#16213e] border-[#1e293b] flex-shrink-0 overflow-hidden">
-                                            <h3 className="text-sm font-semibold mb-2 text-white">Calendar View</h3>
+                                            <h3 className="text-sm font-semibold mb-2 text-white orbitron">Calendar View</h3>
                                             
                                             {/* Calendar Controls - Disabled when filter is active */}
                                             <div className="flex items-center justify-between mb-2 gap-1">
@@ -1243,210 +1167,48 @@ export default function HRDashboard() {
 
             {/* MoodLens Tab - Section 2 */}
             {activeTab === 'emotions' && (
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between flex-wrap gap-4">
-                        <h2 className="text-xl font-bold">MoodLens</h2>
-                        <div className="flex items-center gap-3 flex-wrap">
-                            <label className="text-sm font-medium">View:</label>
-                            <select
-                                value={dateRange}
-                                onChange={(e) => setDateRange(e.target.value)}
-                                className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                            >
-                                <option value="day" className="bg-[#1e293b] text-white">Today</option>
-                                <option value="week" className="bg-[#1e293b] text-white">This Week</option>
-                                <option value="month" className="bg-[#1e293b] text-white">This Month</option>
-                            </select>
-                            
-                            {dateRange === 'day' && (
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                                />
-                            )}
-                            
-                            {(dateRange === 'week' || dateRange === 'month') && (
-                                <>
-                                    <label className="text-xs text-slate-400">From:</label>
-                                    <input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                                    />
-                                    <label className="text-xs text-slate-400">To:</label>
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                                    />
-                                </>
-                            )}
-                            
-                            {/* Advanced Filter Toggle Button */}
-                            <button
-                                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                                className={`p-2 border rounded hover:bg-[#334155] transition-colors ${
-                                    showAdvancedFilters ? 'bg-[#334155] border-[#475569]' : 'bg-[#1e293b] border-[#334155]'
-                                }`}
-                                title="Advanced Filters"
-                            >
-                                <svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    fill="none" 
-                                    viewBox="0 0 24 24" 
-                                    strokeWidth={1.5} 
-                                    stroke="currentColor" 
-                                    className="w-5 h-5 text-slate-600"
-                                >
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
+                <MoodLens
+                    dateRange={dateRange}
+                    setDateRange={setDateRange}
+                    selectedDate={selectedDate}
+                    setSelectedDate={setSelectedDate}
+                    startDate={startDate}
+                    setStartDate={setStartDate}
+                    endDate={endDate}
+                    setEndDate={setEndDate}
+                    showAdvancedFilters={showAdvancedFilters}
+                    setShowAdvancedFilters={setShowAdvancedFilters}
+                    emotionGenderFilter={emotionGenderFilter}
+                    setEmotionGenderFilter={setEmotionGenderFilter}
+                    emotionDepartmentFilter={emotionDepartmentFilter}
+                    setEmotionDepartmentFilter={setEmotionDepartmentFilter}
+                    employees={employees}
+                    attendanceLoading={attendanceLoading}
+                    emotionData={emotionData}
+                    emotionViewMode={emotionViewMode}
+                    setEmotionViewMode={setEmotionViewMode}
+                    getPositiveNegativeData={getPositiveNegativeData}
+                />
+            )}
 
-                    {/* Advanced Filters (Gender and Department) */}
-                    {showAdvancedFilters && (
-                        <div className="bg-[#16213e] p-4 rounded-lg border border-[#1e293b]">
-                            <div className="flex items-center gap-4 flex-wrap">
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-white">Gender:</label>
-                                    <select
-                                        value={emotionGenderFilter}
-                                        onChange={(e) => setEmotionGenderFilter(e.target.value)}
-                                        className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                                    >
-                                        <option value="all" className="bg-[#1e293b] text-white">All Genders</option>
-                                        {[...new Set(employees.map(emp => emp.gender).filter(Boolean))].map(gender => (
-                                            <option key={gender} value={gender} className="bg-[#1e293b] text-white">{gender}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-white">Department:</label>
-                                    <select
-                                        value={emotionDepartmentFilter}
-                                        onChange={(e) => setEmotionDepartmentFilter(e.target.value)}
-                                        className="border border-[#334155] rounded px-3 py-2 bg-[#1e293b] text-white"
-                                    >
-                                        <option value="all" className="bg-[#1e293b] text-white">All Departments</option>
-                                        {[...new Set(employees.map(emp => emp.department).filter(Boolean))].map(dept => (
-                                            <option key={dept} value={dept} className="bg-[#1e293b] text-white">{dept}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {attendanceLoading ? (
-                        <div className="text-center py-12 text-slate-500">Loading emotion data...</div>
-                    ) : emotionData.length > 0 ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div className="bg-[#16213e] border border-[#1e293b] rounded-xl p-6 shadow-sm">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-semibold text-white">
-                                        {emotionViewMode === 'positiveNegative' ? 'Feeling Distribution' : 'Emotion Distribution'}
-                                    </h3>
-                                    {emotionViewMode === 'individual' && (
-                                        <button
-                                            onClick={() => setEmotionViewMode('positiveNegative')}
-                                            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                                        >
-                                            ← Back to Overview
-                                        </button>
-                                    )}
-                                </div>
-                                <div 
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                        if (emotionViewMode === 'positiveNegative') {
-                                            setEmotionViewMode('individual');
-                                        }
-                                    }}
-                                >
-                                    <ResponsiveContainer width="100%" height={400}>
-                                        <PieChart>
-                                            <Pie
-                                                data={emotionViewMode === 'positiveNegative' ? getPositiveNegativeData() : emotionData}
-                                                cx="50%"
-                                                cy="50%"
-                                                labelLine={false}
-                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                outerRadius={120}
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                            >
-                                                {(emotionViewMode === 'positiveNegative' ? getPositiveNegativeData() : emotionData).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip />
-                                            <Legend />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    {emotionViewMode === 'positiveNegative' && (
-                                        <p className="text-center text-sm text-slate-400 mt-2">Click on the chart to see individual emotions</p>
-                                    )}
-                                </div>
-                            </div>
-                            
-                            <div className="bg-[#16213e] border border-[#1e293b] rounded-xl p-6 shadow-sm">
-                                <h3 className="text-lg font-semibold mb-4 text-white">Emotion Summary</h3>
-                                <div className="space-y-3">
-                                    {emotionData.map((emotion, index) => {
-                                        const totalCheckIns = emotionData.reduce((sum, e) => sum + e.value, 0);
-                                        return (
-                                            <div key={index} className="flex items-center justify-between p-3 bg-[#1e293b] rounded-lg">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="w-4 h-4 rounded-full"
-                                                        style={{ backgroundColor: emotion.color }}
-                                                    />
-                                                    <span className="font-medium text-white">{emotion.name}</span>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className="text-slate-300">{emotion.value} check-ins</span>
-                                                    <span className="text-slate-400">
-                                                        ({totalCheckIns > 0 ? ((emotion.value / totalCheckIns) * 100).toFixed(1) : 0}%)
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                                <div className="mt-6 p-4 bg-blue-900/20 rounded-lg border border-blue-700/50">
-                                    <div className="text-sm font-semibold text-blue-300 mb-1">
-                                        Total Check-ins {dateRange === 'day' ? 'Today' : dateRange === 'week' ? 'This Week' : 'This Month'}
-                                    </div>
-                                    <div className="text-2xl font-bold text-blue-400">
-                                        {emotionData.reduce((sum, e) => sum + e.value, 0)}
-                                    </div>
-                                    {dateRange !== 'day' && (
-                                        <div className="text-xs text-blue-300 mt-1">
-                                            {startDate} to {endDate}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-12 bg-[#16213e] rounded-xl border border-[#1e293b]">
-                            <p className="text-slate-300">
-                                No emotion data found {dateRange === 'day' ? 'for this date' : `for ${dateRange === 'week' ? 'this week' : 'this month'}`}.
-                            </p>
-                            <p className="text-sm text-slate-500 mt-2">Employees need to check in at the kiosk to see emotion data.</p>
-                        </div>
-                    )}
-                        </div>
-                    )}
+            {/* Announcements Tab */}
+            {activeTab === 'dashboard' && (
+                <AnnouncementsSection
+                    announcements={announcements}
+                    announcementTitle={announcementTitle}
+                    setAnnouncementTitle={setAnnouncementTitle}
+                    announcementMessage={announcementMessage}
+                    setAnnouncementMessage={setAnnouncementMessage}
+                    announcementPriority={announcementPriority}
+                    setAnnouncementPriority={setAnnouncementPriority}
+                    announcementSaving={announcementSaving}
+                    setAnnouncementSaving={setAnnouncementSaving}
+                    error={error}
+                    setError={setError}
+                    fetchAnnouncements={fetchAnnouncements}
+                />
+            )}
                     </div>
-                </div>
-            </div>
 
             {/* Edit Employee Sidebar */}
             {showEditSidebar && editing && (
@@ -1458,7 +1220,7 @@ export default function HRDashboard() {
                     ></div>
                     
                     {/* Sidebar */}
-                    <div className={`fixed right-0 top-0 h-full w-full max-w-md bg-[#16213e] border-l border-[#1e293b] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+                    <div className={`fixed right-0 top-0 h-full w-full sm:max-w-md bg-[#16213e] border-l border-[#1e293b] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
                         showEditSidebar ? 'translate-x-0' : 'translate-x-full'
                     }`}>
                         <div className="h-full overflow-y-auto">
@@ -1497,7 +1259,7 @@ export default function HRDashboard() {
                                         />
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-2">Gender</label>
                                             <select
@@ -1535,6 +1297,18 @@ export default function HRDashboard() {
                                             placeholder="Enter department name" 
                                             value={editForm.department} 
                                             onChange={e => setEditForm({ ...editForm, department: e.target.value })} 
+                                            required
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                                        <input 
+                                            className="border border-[#334155] rounded-lg p-3 w-full bg-[#1e293b] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" 
+                                            placeholder="Enter email address" 
+                                            type="email"
+                                            value={editForm.email} 
+                                            onChange={e => setEditForm({ ...editForm, email: e.target.value })} 
                                             required
                                         />
                                     </div>
@@ -1583,6 +1357,9 @@ export default function HRDashboard() {
                     </div>
                 </>
             )}
-        </div>
+                    </div>
+                </div>
+            </div>
+        </>
     );
 }
