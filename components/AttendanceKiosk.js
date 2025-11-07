@@ -27,13 +27,35 @@ export default function AttendanceKiosk() {
         
         const initializeWebcam = async () => {
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720, facingMode: 'user' }
-                });
+                // Check if getUserMedia is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser. Please use a modern browser.');
+                }
+
+                // Check HTTPS requirement (except localhost)
+                if (location.protocol !== 'https:' && 
+                    location.hostname !== 'localhost' && 
+                    location.hostname !== '127.0.0.1') {
+                    throw new Error('HTTPS_REQUIRED');
+                }
+
+                // Try with user-facing camera first (more lenient constraints)
+                let constraints = { video: { facingMode: 'user' } };
+                
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (constraintError) {
+                    // Fallback to most basic constraint if facingMode fails
+                    console.warn('Failed with facingMode, trying basic video constraint:', constraintError);
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                }
                 setStream(mediaStream);
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
                     videoRef.current.muted = true; // Required for autoplay in some browsers
+                    videoRef.current.playsInline = true; // Required for mobile browsers (iOS Safari)
+                    videoRef.current.setAttribute('playsinline', 'true'); // iOS Safari specific
+                    
                     // Wait for video to be ready
                     await new Promise((resolve) => {
                         const video = videoRef.current;
@@ -42,8 +64,8 @@ export default function AttendanceKiosk() {
                         } else {
                             video.onloadeddata = resolve;
                             video.onloadedmetadata = resolve;
-                            // Fallback timeout
-                            setTimeout(resolve, 2000);
+                            // Increased timeout for slower connections
+                            setTimeout(resolve, 3000);
                         }
                     });
                     // Force play
@@ -51,6 +73,16 @@ export default function AttendanceKiosk() {
                         await videoRef.current.play();
                     } catch (playErr) {
                         console.warn('Autoplay prevented:', playErr);
+                        // Try again after a short delay
+                        setTimeout(async () => {
+                            if (videoRef.current) {
+                                try {
+                                    await videoRef.current.play();
+                                } catch (retryErr) {
+                                    console.warn('Retry play failed:', retryErr);
+                                }
+                            }
+                        }, 500);
                     }
                 }
                 setIsCapturing(true);
@@ -83,8 +115,11 @@ export default function AttendanceKiosk() {
                     } catch (fallbackErr) {
                         errorMsg = 'Unable to access camera. Please check your browser permissions and ensure you are using HTTPS.';
                     }
-                } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                    errorMsg = 'Camera requires HTTPS. Please access this site via HTTPS.';
+                } else if (err.message === 'HTTPS_REQUIRED' || 
+                          (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')) {
+                    errorMsg = 'Camera requires HTTPS. Please access this site via HTTPS. Your deployment must use HTTPS for camera access to work.';
+                } else if (err.message.includes('Camera API not supported')) {
+                    errorMsg = err.message;
                 }
                 
                 setStatusMessage(errorMsg);
@@ -557,7 +592,7 @@ export default function AttendanceKiosk() {
 
                     {/* Right Side - Camera, Recent Check-ins & Instructions */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Main Camera View */}
+                    {/* Main Camera View */}
                         <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-xl font-bold text-white orbitron">Attendance Kiosk</h2>
@@ -664,74 +699,74 @@ export default function AttendanceKiosk() {
                                         </div>
                                     </>
                                 )}
-                            </div>
                         </div>
+                    </div>
 
                         {/* Recent Check-ins & Instructions - Horizontal Layout */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Attendance Log */}
+                        {/* Attendance Log */}
                             <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
                                 <h3 className="text-lg font-bold mb-4 text-white orbitron">Recent Check-Ins</h3>
-                                {attendanceLog.length === 0 ? (
+                            {attendanceLog.length === 0 ? (
                                     <p className="text-center py-8 text-slate-400">
-                                        No check-ins yet
-                                    </p>
-                                ) : (
+                                    No check-ins yet
+                                </p>
+                            ) : (
                                     <div className="flex flex-wrap gap-3">
-                                        {attendanceLog.map((log) => (
-                                            <div
-                                                key={log.id}
+                                    {attendanceLog.map((log) => (
+                                        <div
+                                            key={log.id}
                                                 className="p-3 rounded-lg bg-[#1e293b] border border-[#334155] min-w-[150px] flex-shrink-0"
                                             >
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-semibold text-white mb-1 orbitron">
                                                         {log.name || 'Unknown'}
-                                                    </span>
+                                                </span>
                                                     <p className="text-slate-400 text-xs">
-                                                        {log.timestamp}
-                                                    </p>
+                                                {log.timestamp}
+                                            </p>
                                                     {log.department && (
                                                         <p className="text-slate-500 text-xs mt-1">
                                                             {log.department}
                                                         </p>
                                                     )}
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Instructions */}
+                        {/* Instructions */}
                             <div className="rounded-2xl p-6 bg-[#16213e] border border-[#1e293b] shadow-xl">
                                 <h3 className="text-lg font-bold mb-4 text-white orbitron">Instructions</h3>
                                 <ul className="space-y-2 text-sm text-slate-300">
-                                    <li className="flex items-start">
-                                        <span className="mr-2">1.</span>
+                                <li className="flex items-start">
+                                    <span className="mr-2">1.</span>
                                         <span>Position your face clearly in the frame</span>
-                                    </li>
-                                    <li className="flex items-start">
-                                        <span className="mr-2">2.</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">2.</span>
                                         <span>The system automatically captures and recognizes your face every {captureInterval} seconds</span>
-                                    </li>
-                                    <li className="flex items-start">
-                                        <span className="mr-2">3.</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">3.</span>
                                         <span>No button clicks needed - just stand in front of the camera!</span>
-                                    </li>
-                                    <li className="flex items-start">
-                                        <span className="mr-2">4.</span>
+                                </li>
+                                <li className="flex items-start">
+                                    <span className="mr-2">4.</span>
                                         <span>Attendance is automatically recorded when your face is recognized</span>
                                     </li>
                                     <li className="flex items-start">
                                         <span className="mr-2">5.</span>
                                         <span>Look for the green status message when attendance is marked</span>
-                                    </li>
-                                </ul>
+                                </li>
+                            </ul>
                             </div>
+                        </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </div>
         </div>
     );

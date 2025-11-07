@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 export default function HRLoginPage() {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -71,6 +72,24 @@ export default function HRLoginPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#0f0f23] relative overflow-hidden">
+            {/* Back Arrow - Top Left */}
+            <Link 
+                href="/"
+                className="fixed top-4 left-4 z-50 p-3 rounded-lg bg-[#1a1a2e]/90 backdrop-blur-sm border border-[#1e293b] hover:bg-[#16213e] hover:border-[#334155] transition-all duration-200 group"
+                aria-label="Back to kiosk"
+            >
+                <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    strokeWidth={2} 
+                    stroke="currentColor" 
+                    className="w-6 h-6 text-white group-hover:text-blue-400 transition-colors"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+            </Link>
+            
             {/* Animated Background Elements */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
                 {/* Animated gradient orbs - Professional blue/slate tones */}
