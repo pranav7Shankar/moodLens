@@ -75,86 +75,110 @@ export default function AttendanceKiosk() {
                 
                 setStream(mediaStream);
                     
-                    video.srcObject = mediaStream;
-                    video.muted = true;
-                    video.playsInline = true;
-                    video.autoplay = true;
-                    video.setAttribute('playsinline', 'true');
-                    video.setAttribute('autoplay', 'true');
-                    video.setAttribute('muted', 'true');
+                video.srcObject = mediaStream;
+                video.muted = true;
+                video.playsInline = true;
+                video.autoplay = true;
+                video.setAttribute('playsinline', 'true');
+                video.setAttribute('autoplay', 'true');
+                video.setAttribute('muted', 'true');
+                
+                console.log('Video element properties:', {
+                    srcObject: !!video.srcObject,
+                    muted: video.muted,
+                    playsInline: video.playsInline,
+                    autoplay: video.autoplay
+                });
+                
+                console.log('⏳ Waiting for video to be ready...');
+                
+                // More robust ready detection
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        console.warn('⚠️ Video load timeout (5s) - proceeding anyway');
+                        resolve();
+                    }, 5000);
                     
-                    console.log('⏳ Waiting for video to be ready...');
+                    const onReady = () => {
+                        console.log('✅ Video ready!', {
+                            readyState: video.readyState,
+                            videoWidth: video.videoWidth,
+                            videoHeight: video.videoHeight,
+                            paused: video.paused
+                        });
+                        clearTimeout(timeout);
+                        resolve();
+                    };
                     
-                    // More robust ready detection
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            console.warn('⚠️ Video load timeout (5s) - proceeding anyway');
-                            resolve();
-                        }, 5000);
-                        
-                        const onReady = () => {
-                            console.log('✅ Video ready!', {
-                                readyState: video.readyState,
-                                videoWidth: video.videoWidth,
-                                videoHeight: video.videoHeight,
-                                paused: video.paused
-                            });
-                            clearTimeout(timeout);
-                            resolve();
-                        };
-                        
-                        const onError = (e) => {
-                            console.error('❌ Video error:', e);
-                            clearTimeout(timeout);
-                            reject(e);
-                        };
-                        
-                        video.addEventListener('error', onError, { once: true });
-                        
-                        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-                            onReady();
-                        } else {
-                            video.addEventListener('loadeddata', onReady, { once: true });
-                            video.addEventListener('loadedmetadata', onReady, { once: true });
-                        }
+                    const onError = (e) => {
+                        console.error('❌ Video error:', e);
+                        clearTimeout(timeout);
+                        reject(e);
+                    };
+                    
+                    video.addEventListener('error', onError, { once: true });
+                    
+                    if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+                        onReady();
+                    } else {
+                        video.addEventListener('loadeddata', onReady, { once: true });
+                        video.addEventListener('loadedmetadata', onReady, { once: true });
+                    }
+                });
+                
+                // Force play
+                try {
+                    console.log('▶️ Attempting to play video...');
+                    const playPromise = video.play();
+                    await playPromise;
+                    console.log('✅ Video playing successfully!', {
+                        paused: video.paused,
+                        currentTime: video.currentTime,
+                        readyState: video.readyState
                     });
+                } catch (playErr) {
+                    console.error('❌ Autoplay failed:', playErr.name, playErr.message);
                     
-                    // Force play
+                    // Try multiple recovery strategies
+                    console.log('🔄 Attempting recovery strategies...');
+                    
+                    // Strategy 1: Wait and retry
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     try {
-                        console.log('▶️ Attempting to play video...');
                         await video.play();
-                        console.log('✅ Video playing successfully!');
-                    } catch (playErr) {
-                        console.error('❌ Autoplay failed:', playErr.name, playErr.message);
+                        console.log('✅ Video playing after retry!');
+                    } catch (retry1Err) {
+                        console.warn('Retry 1 failed:', retry1Err);
                         
-                        // Try multiple recovery strategies
-                        console.log('🔄 Attempting recovery strategies...');
+                        // Strategy 2: Reset srcObject and try again
+                        console.log('🔄 Trying srcObject reset...');
+                        video.srcObject = null;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        video.srcObject = mediaStream;
                         
-                        // Strategy 1: Wait and retry
                         await new Promise(resolve => setTimeout(resolve, 500));
                         try {
                             await video.play();
-                            console.log('✅ Video playing after retry!');
-                        } catch (retry1Err) {
-                            console.warn('Retry 1 failed:', retry1Err);
-                            
-                            // Strategy 2: Reset srcObject and try again
-                            video.srcObject = null;
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                            video.srcObject = mediaStream;
-                            
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                            try {
-                                await video.play();
-                                console.log('✅ Video playing after srcObject reset!');
-                            } catch (retry2Err) {
-                                console.error('All retry strategies failed:', retry2Err);
-                                // Don't throw - camera is working, just might not autoplay
-                                console.log('⚠️ Proceeding without autoplay - user interaction may be needed');
-                            }
+                            console.log('✅ Video playing after srcObject reset!');
+                        } catch (retry2Err) {
+                            console.error('All retry strategies failed:', retry2Err);
+                            // Don't throw - camera is working, just might not autoplay
+                            console.log('⚠️ Proceeding without autoplay - user interaction may be needed');
                         }
                     }
                 }
+                
+                // Final check
+                console.log('📊 Final video state:', {
+                    isCapturing: true,
+                    videoRef: !!videoRef.current,
+                    srcObject: !!video.srcObject,
+                    paused: video.paused,
+                    muted: video.muted,
+                    readyState: video.readyState,
+                    videoWidth: video.videoWidth,
+                    videoHeight: video.videoHeight
+                });
                 
                 setIsCapturing(true);
                 setStatusMessage('');
