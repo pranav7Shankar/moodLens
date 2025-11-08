@@ -643,7 +643,17 @@ export default function AttendanceKiosk() {
                             </div>
 
                             <div className="relative aspect-video bg-slate-900 rounded-xl overflow-hidden mb-4">
-                                {!isCapturing ? (
+                                {/* Always render video element - just hide it when not capturing */}
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className={`w-full h-full object-cover ${!isCapturing ? 'hidden' : ''}`}
+                                    style={{ backgroundColor: '#000' }}
+                                />
+                                
+                                {!isCapturing && (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                                         <div className="text-6xl mb-4">📷</div>
                                         <p className="text-lg mb-6 text-slate-400">
@@ -658,27 +668,17 @@ export default function AttendanceKiosk() {
                                         </button>
                                         )}
                                     </div>
-                                ) : (
-                                    <>
-                                        <video
-                                            ref={videoRef}
-                                            autoPlay
-                                            playsInline
-                                            muted
-                                            className="w-full h-full object-cover"
-                                            style={{ backgroundColor: '#000' }}
-                                        />
-                                        {isProcessing && (
-                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                                <div className="text-center">
-                                                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                                    <p className="text-white font-semibold">
-                                                        {analyzing ? 'Recognizing face...' : 'Processing...'}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
+                                )}
+                                
+                                {isProcessing && (
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                        <div className="text-center">
+                                            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                            <p className="text-white font-semibold">
+                                                {analyzing ? 'Recognizing face...' : 'Processing...'}
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
