@@ -12,45 +12,47 @@ export default function EmployeeDatabase({
 }) {
     return (
         <div className="space-y-4 md:space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative">
-                <div className="flex items-center gap-3">
+            <div className="w-full">
+                <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-2xl md:text-3xl font-extrabold orbitron">Employee Database</h2>
-                    <span className="text-sm text-slate-400">
-                        ({employeeDepartmentFilter === 'all' ? employees.length : employees.filter(emp => emp.department === employeeDepartmentFilter).length} employees)
-                    </span>
-                </div>
-                <div className="relative employee-filter-container">
-                    <button
-                        onClick={() => setShowEmployeeFilter(!showEmployeeFilter)}
-                        className={`p-2 border rounded hover:bg-[#334155] transition-colors ${
-                            showEmployeeFilter ? 'bg-[#334155] border-[#475569]' : 'bg-[#1e293b] border-[#334155]'
-                        }`}
-                        title="Filter by Department"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                        </svg>
-                    </button>
-                    {showEmployeeFilter && (
-                        <div className="absolute right-0 mt-2 bg-[#16213e] border border-[#1e293b] rounded-lg shadow-xl z-10 min-w-[180px]">
-                            <div className="p-2">
-                                <select
-                                    value={employeeDepartmentFilter}
-                                    onChange={(e) => {
-                                        setEmployeeDepartmentFilter(e.target.value);
-                                        setShowEmployeeFilter(false);
-                                    }}
-                                    className="w-full px-2 py-1.5 border border-[#334155] rounded bg-[#1e293b] text-white text-sm"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <option value="all" className="bg-[#1e293b] text-white">All Departments</option>
-                                    {[...new Set(employees.map(emp => emp.department).filter(Boolean))].map(dept => (
-                                        <option key={dept} value={dept} className="bg-[#1e293b] text-white">{dept}</option>
-                                    ))}
-                                </select>
+                    <div className="relative employee-filter-container ml-auto">
+                        <button
+                            onClick={() => setShowEmployeeFilter(!showEmployeeFilter)}
+                            className={`p-2 border rounded hover:bg-[#334155] transition-colors ${
+                                showEmployeeFilter ? 'bg-[#334155] border-[#475569]' : 'bg-[#1e293b] border-[#334155]'
+                            }`}
+                            title="Filter by Department"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-white">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                            </svg>
+                        </button>
+                        {showEmployeeFilter && (
+                            <div className="absolute right-0 mt-2 bg-[#16213e] border border-[#1e293b] rounded-lg shadow-xl z-10 min-w-[180px]">
+                                <div className="p-2">
+                                    <select
+                                        value={employeeDepartmentFilter}
+                                        onChange={(e) => {
+                                            setEmployeeDepartmentFilter(e.target.value);
+                                            setShowEmployeeFilter(false);
+                                        }}
+                                        className="w-full px-2 py-1.5 border border-[#334155] rounded bg-[#1e293b] text-white text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <option value="all" className="bg-[#1e293b] text-white">All Departments</option>
+                                        {[...new Set(employees.map(emp => emp.department).filter(Boolean))].map(dept => (
+                                            <option key={dept} value={dept} className="bg-[#1e293b] text-white">{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                    <div className="w-full mt-1">
+                        <span className="text-sm text-slate-400">
+                            ({employeeDepartmentFilter === 'all' ? employees.length : employees.filter(emp => emp.department === employeeDepartmentFilter).length} employees)
+                        </span>
+                    </div>
                 </div>
             </div>
             {loading ? (
@@ -61,7 +63,6 @@ export default function EmployeeDatabase({
                         .filter(emp => employeeDepartmentFilter === 'all' || emp.department === employeeDepartmentFilter)
                         .map(emp => (
                         <div key={emp.id} className="border border-[#1e293b] rounded-xl p-3 bg-[#16213e] hover:bg-[#1a1a2e] transition-all hover:border-[#334155] shadow-sm flex gap-3 h-[200px] relative">
-                            {/* Employee Image - Left Side (1/3 width) */}
                             <div className="w-1/3 flex-shrink-0 h-full">
                                 {emp.employee_image ? (
                                     <img 
@@ -75,8 +76,6 @@ export default function EmployeeDatabase({
                                     </div>
                                 )}
                             </div>
-                            
-                            {/* Employee Details - Right Side (2/3 width) */}
                             <div className="w-2/3 flex flex-col min-w-0 pr-12">
                                 <div className="space-y-2 flex-1">
                                     <h3 className="font-semibold text-lg text-white truncate orbitron">{emp.name}</h3>
@@ -100,8 +99,6 @@ export default function EmployeeDatabase({
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Action Buttons - Bottom Right, Stacked Vertically */}
                             <div className="absolute bottom-3 right-3 flex flex-col gap-2">
                                 <button 
                                     onClick={() => startEdit(emp)} 
@@ -129,4 +126,3 @@ export default function EmployeeDatabase({
         </div>
     );
 }
-

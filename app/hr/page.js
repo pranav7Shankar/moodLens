@@ -52,7 +52,53 @@ export default function HRDashboard() {
     const [attendanceFilter, setAttendanceFilter] = useState('all'); // 'all', 'present', 'absent'
     const [emotionViewMode, setEmotionViewMode] = useState('positiveNegative'); // 'positiveNegative' or 'individual'
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    useEffect(() => {
+    let mounted = true;
 
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/hr/me', { credentials: 'include', cache: 'no-store' });
+        if (!mounted) return;
+
+        if (!res.ok) {
+          router.replace('/hr/login');
+          window.location.replace('/hr/login');
+          return;
+        }
+
+        const data = await res.json();
+        if (!data || data.error) {
+          router.replace('/hr/login');
+          window.location.replace('/hr/login');
+          return;
+        }
+
+        setCurrentUser(data);
+      } catch (e) {
+        console.error('Auth check failed', e);
+      }
+    };
+
+    checkAuth(); // Run once when component mounts
+
+    // Also check again if user navigates back or page becomes visible again
+    const handlePageShow = () => checkAuth();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkAuth();
+    };
+    const handlePopState = () => checkAuth();
+
+    window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [router]);
     const fetchEmployees = async () => {
         setLoading(true);
         try {
@@ -260,10 +306,15 @@ export default function HRDashboard() {
     };
 
     const logout = async () => {
-        await fetch('/api/hr/logout', { method: 'POST' });
-        setCurrentUser(null);
-        router.push('/hr/login');
-    };
+  try {
+    await fetch('/api/hr/logout', { method: 'POST', credentials: 'include' });
+  } catch (e) {
+    console.warn('Logout request failed', e);
+  }
+  setCurrentUser(null);
+  router.replace('/hr/login');
+  window.location.replace('/hr/login');
+};
 
     // Fetch attendance history for a specific employee
     const fetchEmployeeHistory = async (employeeId, employeeName) => {
@@ -735,9 +786,9 @@ export default function HRDashboard() {
                                 setActiveTab('employees');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
+                            className={`w-full text-left px-4 py-4 rounded-lg transition-colors mb-2 text-md md:text-md orbitron ${
                                 activeTab === 'employees'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
@@ -748,9 +799,9 @@ export default function HRDashboard() {
                                 setActiveTab('management');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
+                            className={`w-full text-left px-4 py-4 rounded-lg transition-colors mb-2 text-md md:text-md orbitron ${
                                 activeTab === 'management'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
@@ -761,9 +812,9 @@ export default function HRDashboard() {
                                 setActiveTab('attendance');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
+                            className={`w-full text-left px-4 py-4 rounded-lg transition-colors mb-2 text-md md:text-md orbitron ${
                                 activeTab === 'attendance'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
@@ -774,9 +825,9 @@ export default function HRDashboard() {
                                 setActiveTab('emotions');
                                 setMobileSidebarOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors mb-2 text-xs md:text-sm orbitron ${
+                            className={`w-full text-left px-4 py-4 rounded-lg transition-colors mb-2 text-md md:text-md orbitron ${
                                 activeTab === 'emotions'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
@@ -788,9 +839,9 @@ export default function HRDashboard() {
                                 setMobileSidebarOpen(false);
                                 fetchAnnouncements();
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition-colors text-xs md:text-sm orbitron ${
+                            className={`w-full text-left px-4 py-4 rounded-lg transition-colors text-md md:text-md orbitron ${
                                 activeTab === 'dashboard'
-                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-black shadow-lg shadow-blue-500/20'
+                                    ? 'bg-gradient-to-r from-[#2563eb] to-[#1e40af] text-white shadow-lg shadow-blue-500/20'
                                     : 'text-slate-300 hover:bg-[#16213e] hover:text-white'
                             }`}
                         >
@@ -799,7 +850,7 @@ export default function HRDashboard() {
                     </nav>
                     
                     {/* Spline 3D Viewer - Hidden on mobile, visible on larger screens */}
-                    <div className="hidden lg:block w-full h-64 overflow-hidden p-0 m-0 relative">
+                    <div className="hidden md:block w-full h-64 overflow-hidden p-0 m-0 relative">
                         <spline-viewer 
                             url="https://prod.spline.design/e1REzfr4Htu1fYPj/scene.splinecode"
                             style={{ width: '100%', height: '100%', margin: 0, padding: 0 }}

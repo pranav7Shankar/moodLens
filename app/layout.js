@@ -2,7 +2,7 @@ import "@/styles/globals.css";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 export const metadata = {
-  title: "MoodLens - AI-Powered Facial Recognition and Emotion Detection",
+  title: "MoodLens",
   description: "AI-Powered Facial Recognition and Emotion Detection System for HR Management",
 };
 

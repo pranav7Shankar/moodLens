@@ -27,8 +27,6 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-# Keep .env.example in repo for reference
-!.env.example
 
 # vercel
 .vercel
@@ -36,3 +34,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
