@@ -63,6 +63,9 @@ export async function middleware(request) {
 }
 
 export const config = {
-    matcher: ['/hr/:path*', '/hr'],
+    matcher: [
+        '/hr/:path*',
+        '/hr'
+    ],
 };
 
