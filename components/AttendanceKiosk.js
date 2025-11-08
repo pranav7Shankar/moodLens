@@ -65,11 +65,15 @@ export default function AttendanceKiosk() {
                     throw basicError;
                 }
                 
-                setStream(mediaStream);
+                if (!videoRef.current) {
+                    console.error('❌ Video ref not available');
+                    throw new Error('Video element not found');
+                }
                 
-                if (videoRef.current) {
-                    console.log('📺 Setting up video element...');
-                    const video = videoRef.current;
+                console.log('📺 Setting up video element...');
+                const video = videoRef.current;
+                
+                setStream(mediaStream);
                     
                     video.srcObject = mediaStream;
                     video.muted = true;
